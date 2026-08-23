@@ -3,6 +3,7 @@ package com.aydin.biyohack.data.local
 import androidx.room.TypeConverter
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 
 /** Bir satırın Supabase'e itilip itilmediğini takip eder — offline-first kuyruk durumu. */
 enum class SyncState { PENDING, SYNCED }
@@ -27,4 +28,10 @@ class Converters {
 
     @TypeConverter
     fun stringToSyncState(value: String): SyncState = SyncState.valueOf(value)
+
+    @TypeConverter
+    fun localTimeToString(value: LocalTime?): String? = value?.toString() // "HH:mm" ISO-8601
+
+    @TypeConverter
+    fun stringToLocalTime(value: String?): LocalTime? = value?.let { LocalTime.parse(it) }
 }
