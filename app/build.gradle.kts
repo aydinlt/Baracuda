@@ -65,6 +65,13 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    sourceSets {
+        // MigrationTest'in eski şema JSON'larını (1.json, 2.json, ...) bulması için.
+        // İlk `./gradlew assembleDebug` sonrası app/schemas/ altında üretilirler —
+        // build çıktısı değildir, commitlenmesi gerekir (bkz. .gitignore istisnası).
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
+    }
 }
 
 ksp {
@@ -87,11 +94,13 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.navigation:navigation-compose:2.8.4")
 
     // ---- Room (yerel önbellek / offline-first) ----
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
 
     // ---- Health Connect (Samsung Health verisi de cihazda Health Connect'e
     // senkronize olduğu için tek okuma katmanı burası — bkz. HealthConnectManager.kt) ----

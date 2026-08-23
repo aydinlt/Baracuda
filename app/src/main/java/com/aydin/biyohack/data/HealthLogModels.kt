@@ -7,10 +7,10 @@ import java.util.UUID
 /**
  * Öğün / kahve / su / takviye logu — yerel-öncelikli (offline-first) kayıt.
  *
- * NOT: `com.aydin.biyohack.twin.IntakeType` (Hafta 4) ile kasıtlı olarak
- * BAĞIMSIZ tutulur — data katmanı twin katmanına bağımlı olmamalı (katman
- * yönü tek taraflı: twin → data). İkisi arasındaki köprü (IntakeKind →
- * twin.IntakeEntry dönüşümü) Hafta 2'de ViewModel/use-case katmanında kurulur.
+ * NOT: `com.aydin.biyohack.twin.IntakeType` ile kasıtlı olarak BAĞIMSIZ
+ * tutulur — data katmanı twin katmanına bağımlı olmamalı (katman yönü tek
+ * taraflı: twin → data). İkisi arasındaki köprü (IntakeKind → twin.IntakeEntry
+ * dönüşümü) twin/IntakeBridge.kt'de, twin paketinin altında yaşar.
  */
 enum class IntakeKind { MEAL, COFFEE, WATER, SUPPLEMENT }
 

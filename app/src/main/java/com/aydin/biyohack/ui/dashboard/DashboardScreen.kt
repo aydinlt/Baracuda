@@ -24,7 +24,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
+import com.aydin.biyohack.data.repository.AuthRepository
 import com.aydin.biyohack.data.repository.HealthSyncRepository
+import com.aydin.biyohack.data.repository.ProfileRepository
 import com.aydin.biyohack.health.HealthConnectManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +47,8 @@ data class DashboardUiState(
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val repository: HealthSyncRepository,
+    private val profileRepository: ProfileRepository,
+    private val authRepository: AuthRepository,
     val healthConnectManager: HealthConnectManager
 ) : ViewModel() {
 
@@ -59,6 +63,10 @@ class DashboardViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _ui.update { it.copy(permissionsGranted = healthConnectManager.hasAllPermissions()) }
+        }
+        // İlk girişte Supabase'de profil satırı yoksa varsayılanlarla oluşturur.
+        viewModelScope.launch {
+            authRepository.currentUserId()?.let { profileRepository.ensureLoaded(it) }
         }
     }
 
@@ -89,7 +97,7 @@ class DashboardViewModel @Inject constructor(
 }
 
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun DashboardScreen(onOpenTwin: () -> Unit = {}, viewModel: DashboardViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
 
     val permissionContract = remember { viewModel.healthConnectManager.requestPermissionsContract() }
@@ -142,6 +150,10 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
             Button(onClick = { viewModel.syncNow() }, enabled = !ui.isSyncing) {
                 if (ui.isSyncing) CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
                 Text(if (ui.isSyncing) "Senkronize ediliyor..." else "Şimdi Senkronize Et")
+            }
+
+            Button(onClick = onOpenTwin, modifier = Modifier.fillMaxWidth()) {
+                Text("İkize sor")
             }
 
             ui.error?.let { Text("Hata: $it") }

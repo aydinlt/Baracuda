@@ -5,10 +5,12 @@ import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.Profile
 import com.aydin.biyohack.data.SnapshotSource
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Supabase (Postgrest) satırlarına karşılık gelen DTO'lar — kolon adları
@@ -124,4 +126,33 @@ fun ClinicalFlagRecord.toRow() = ClinicalFlagRow(
 fun ClinicalFlagRow.toDomain() = ClinicalFlagRecord(
     id = id, userId = userId, finding = finding, status = status, action = action,
     raisedAt = java.time.Instant.parse(raisedAt), resolved = resolved
+)
+
+@Serializable
+data class ProfileRow(
+    val id: String,
+    @SerialName("full_name") val fullName: String = "Aydın Kırmızıoğlu",
+    @SerialName("birth_year") val birthYear: Int? = null,
+    val sex: String = "male",
+    @SerialName("height_cm") val heightCm: Double = 180.0,
+    val timezone: String = "Europe/Vilnius",
+    @SerialName("water_target_ml") val waterTargetMl: Int = 4000,
+    @SerialName("protein_target_min_g") val proteinTargetMinG: Int = 140,
+    @SerialName("protein_target_max_g") val proteinTargetMaxG: Int = 170,
+    @SerialName("wake_target") val wakeTarget: String = "07:00:00",
+    @SerialName("bed_earliest") val bedEarliest: String = "23:00:00"
+)
+
+fun Profile.toRow() = ProfileRow(
+    id = userId, fullName = fullName, birthYear = birthYear, sex = sex,
+    heightCm = heightCm, timezone = timezone, waterTargetMl = waterTargetMl,
+    proteinTargetMinG = proteinTargetMinG, proteinTargetMaxG = proteinTargetMaxG,
+    wakeTarget = wakeTarget.toString(), bedEarliest = bedEarliest.toString()
+)
+
+fun ProfileRow.toDomain() = Profile(
+    userId = id, fullName = fullName, birthYear = birthYear, sex = sex,
+    heightCm = heightCm, timezone = timezone, waterTargetMl = waterTargetMl,
+    proteinTargetMinG = proteinTargetMinG, proteinTargetMaxG = proteinTargetMaxG,
+    wakeTarget = LocalTime.parse(wakeTarget), bedEarliest = LocalTime.parse(bedEarliest)
 )
