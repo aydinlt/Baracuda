@@ -126,6 +126,9 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Android'in org.json'ı JVM birim testlerinde stub'dır (metodları çağırınca patlar) —
+    // TwinEngine.parse() gerçek JSON ayrıştırdığı için gerçek bir org.json implementasyonu gerekiyor.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

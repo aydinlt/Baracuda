@@ -75,7 +75,8 @@ class TwinEngine(
         }
     }
 
-    private fun parse(raw: String): TwinOutput {
+    // internal: TwinEngineParseTest bu fonksiyonu network I/O olmadan doğrudan test eder.
+    internal fun parse(raw: String): TwinOutput {
         // Model ara sıra ``` ile sarabiliyor — savunmacı temizlik
         val cleaned = raw.trim()
             .removePrefix("```json").removePrefix("```")

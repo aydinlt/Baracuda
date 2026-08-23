@@ -91,7 +91,59 @@ class HealthSyncRepository(
             )
             intakeRecordDao.insert(record.toEntity(SyncState.PENDING))
             pushPendingIntake()
+            Unit
         }
+
+    /** Elle laboratuvar sonucu ekler (ör. web panelini beklemeden cihazdan). */
+    suspend fun addLabResult(
+        panel: String,
+        marker: String,
+        value: Double,
+        unit: String?,
+        refLow: Double?,
+        refHigh: Double?,
+        takenAt: LocalDate,
+        notes: String? = null
+    ): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val result = LabResult(
+            id = UUID.randomUUID().toString(),
+            userId = userId,
+            panel = panel,
+            marker = marker,
+            value = value,
+            unit = unit,
+            refLow = refLow,
+            refHigh = refHigh,
+            takenAt = takenAt,
+            notes = notes
+        )
+        labResultDao.upsert(result.toEntity(SyncState.PENDING))
+        pushPendingLabResults()
+        Unit
+    }
+
+    /** Elle klinik bayrak ekler — TwinGuardrails'in ürettiklerine ek olarak kullanıcı da açabilir. */
+    suspend fun addClinicalFlag(finding: String, status: String, action: String = "none"): Result<Unit> =
+        runCatching {
+            val userId = currentUserId() ?: error("Oturum açık değil")
+            val flag = ClinicalFlagRecord(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                finding = finding,
+                status = status,
+                action = action
+            )
+            clinicalFlagDao.insert(flag.toEntity(SyncState.PENDING))
+            pushPendingClinicalFlags()
+            Unit
+        }
+
+    suspend fun resolveClinicalFlag(id: String): Result<Unit> = runCatching {
+        clinicalFlagDao.markResolved(id)
+        pushPendingClinicalFlags()
+        Unit
+    }
 
     suspend fun pushPendingSnapshots() = runCatching {
         dailySnapshotDao.getPending().forEach { entity ->

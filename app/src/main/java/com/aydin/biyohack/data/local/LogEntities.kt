@@ -149,4 +149,8 @@ interface ClinicalFlagDao {
 
     @Query("UPDATE clinical_flag SET syncState = 'SYNCED' WHERE id = :id")
     suspend fun markSynced(id: String)
+
+    /** resolved=1 yapar VE syncState='PENDING'e çeker — çözüm de Supabase'e itilmeli. */
+    @Query("UPDATE clinical_flag SET resolved = 1, syncState = 'PENDING' WHERE id = :id")
+    suspend fun markResolved(id: String)
 }
