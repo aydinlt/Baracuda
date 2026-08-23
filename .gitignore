@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Android Studio
+*.hprof
+
+# Room şema geçmişi diskte kalır ama build çıktısı değildir — versiyonlanır
+!app/schemas/
