@@ -53,6 +53,10 @@ interface IntakeRecordDao {
 
     @Query("UPDATE intake_entry SET syncState = 'SYNCED' WHERE id = :id")
     suspend fun markSynced(id: String)
+
+    /** Kreatinsiz gün sayacı için — TwinStateBuilder bunu kullanır (bkz. system_twin.md Bölüm E). */
+    @Query("SELECT * FROM intake_entry WHERE label LIKE '%kreatin%' COLLATE NOCASE ORDER BY ts DESC LIMIT 1")
+    suspend fun getLastCreatineLog(): IntakeRecordEntity?
 }
 
 // ════════════════════════════════════════════════════════════
@@ -145,4 +149,8 @@ interface ClinicalFlagDao {
 
     @Query("UPDATE clinical_flag SET syncState = 'SYNCED' WHERE id = :id")
     suspend fun markSynced(id: String)
+
+    /** resolved=1 yapar VE syncState='PENDING'e çeker — çözüm de Supabase'e itilmeli. */
+    @Query("UPDATE clinical_flag SET resolved = 1, syncState = 'PENDING' WHERE id = :id")
+    suspend fun markResolved(id: String)
 }

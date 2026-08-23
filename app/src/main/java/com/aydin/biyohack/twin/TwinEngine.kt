@@ -35,7 +35,13 @@ class TwinEngine(
     private val supabaseAnonKey: String
 ) {
 
-    suspend fun generate(state: TwinState): Result<TwinOutput> = withContext(Dispatchers.IO) {
+    /**
+     * @param tierOverride verilmezse tier tetikleyiciden çıkarılır (sabah
+     * protokolü = deep, diğerleri = fast). Haftalık seyir analizi gibi
+     * trigger'dan bağımsız senaryolar için "weekly" (Opus) buradan geçilir
+     * — bkz. supabase/functions/twin/index.ts MODELS.weekly.
+     */
+    suspend fun generate(state: TwinState, tierOverride: String? = null): Result<TwinOutput> = withContext(Dispatchers.IO) {
         runCatching {
             val facts = TwinGuardrails.buildFacts(state)
             val stateBlock = TwinStateSerializer.toPromptBlock(state, facts)
@@ -44,7 +50,7 @@ class TwinEngine(
                 put("trigger", state.trigger.name)
                 put("state_block", stateBlock)
                 // Sabah protokolü daha derin sentez ister, gün içi override hızlı olmalı
-                put("tier", if (state.trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast")
+                put("tier", tierOverride ?: if (state.trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast")
             }
 
             val conn = (URL(proxyUrl).openConnection() as HttpURLConnection).apply {
@@ -69,7 +75,8 @@ class TwinEngine(
         }
     }
 
-    private fun parse(raw: String): TwinOutput {
+    // internal: TwinEngineParseTest bu fonksiyonu network I/O olmadan doğrudan test eder.
+    internal fun parse(raw: String): TwinOutput {
         // Model ara sıra ``` ile sarabiliyor — savunmacı temizlik
         val cleaned = raw.trim()
             .removePrefix("```json").removePrefix("```")

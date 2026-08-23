@@ -1,8 +1,10 @@
 package com.aydin.biyohack.data.repository
 
+import com.aydin.biyohack.data.ClinicalFlagRecord
 import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
+import com.aydin.biyohack.data.LabResult
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
 import com.aydin.biyohack.data.local.IntakeRecordDao
@@ -17,6 +19,8 @@ import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
@@ -45,6 +49,23 @@ class HealthSyncRepository(
             .map { list -> list.map { it.toDomain() } }
     }
 
+    fun observeLabResults(): Flow<List<LabResult>> =
+        labResultDao.observeAll().map { list -> list.map { it.toDomain() } }
+
+    fun observeUnresolvedFlags(): Flow<List<ClinicalFlagRecord>> =
+        clinicalFlagDao.observeUnresolved().map { list -> list.map { it.toDomain() } }
+
+    /**
+     * Son kreatin logundan bu yana geçen gün sayısı — TwinGuardrails'in
+     * "test öncesi ara" hatırlatmasında kullandığı sayaç (bkz. TwinState.creatineFreeDays).
+     * Hiç log yoksa 0 döner (sayaç henüz başlamamış demektir, ihlal değil).
+     */
+    suspend fun creatineFreeDays(): Int {
+        val last = intakeRecordDao.getLastCreatineLog() ?: return 0
+        val lastDate = last.ts.atZone(ZoneId.systemDefault()).toLocalDate()
+        return ChronoUnit.DAYS.between(lastDate, LocalDate.now()).toInt().coerceAtLeast(0)
+    }
+
     /** Health Connect'ten bu geceyi okuyup Room'a yazar, ardından Supabase'e itmeyi dener. */
     suspend fun syncLastNightFromDevice(date: LocalDate = LocalDate.now()): Result<DailySnapshot?> =
         runCatching {
@@ -70,7 +91,59 @@ class HealthSyncRepository(
             )
             intakeRecordDao.insert(record.toEntity(SyncState.PENDING))
             pushPendingIntake()
+            Unit
         }
+
+    /** Elle laboratuvar sonucu ekler (ör. web panelini beklemeden cihazdan). */
+    suspend fun addLabResult(
+        panel: String,
+        marker: String,
+        value: Double,
+        unit: String?,
+        refLow: Double?,
+        refHigh: Double?,
+        takenAt: LocalDate,
+        notes: String? = null
+    ): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val result = LabResult(
+            id = UUID.randomUUID().toString(),
+            userId = userId,
+            panel = panel,
+            marker = marker,
+            value = value,
+            unit = unit,
+            refLow = refLow,
+            refHigh = refHigh,
+            takenAt = takenAt,
+            notes = notes
+        )
+        labResultDao.upsert(result.toEntity(SyncState.PENDING))
+        pushPendingLabResults()
+        Unit
+    }
+
+    /** Elle klinik bayrak ekler — TwinGuardrails'in ürettiklerine ek olarak kullanıcı da açabilir. */
+    suspend fun addClinicalFlag(finding: String, status: String, action: String = "none"): Result<Unit> =
+        runCatching {
+            val userId = currentUserId() ?: error("Oturum açık değil")
+            val flag = ClinicalFlagRecord(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                finding = finding,
+                status = status,
+                action = action
+            )
+            clinicalFlagDao.insert(flag.toEntity(SyncState.PENDING))
+            pushPendingClinicalFlags()
+            Unit
+        }
+
+    suspend fun resolveClinicalFlag(id: String): Result<Unit> = runCatching {
+        clinicalFlagDao.markResolved(id)
+        pushPendingClinicalFlags()
+        Unit
+    }
 
     suspend fun pushPendingSnapshots() = runCatching {
         dailySnapshotDao.getPending().forEach { entity ->
@@ -121,5 +194,6 @@ class HealthSyncRepository(
         pushPendingIntake().getOrThrow()
         pushPendingLabResults().getOrThrow()
         pushPendingClinicalFlags().getOrThrow()
+        pullLabResultsFromRemote().getOrThrow()
     }
 }

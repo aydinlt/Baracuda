@@ -27,19 +27,38 @@ class TwinRepository(
         saunaPlannedToday: Boolean = false
     ): Result<TwinOutput> = runCatching {
         val state = stateBuilder.build(trigger, userNote, plannedTrainingToday, saunaPlannedToday)
+        val tier = if (trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast"
         val output = engine.generate(state).getOrThrow()
-        logOutput(trigger, output)
+        logOutput(trigger, tier, output)
         output
     }
 
-    private suspend fun logOutput(trigger: Trigger, output: TwinOutput) {
+    /**
+     * Haftalık seyir analizi — son 14 gecenin eğilimini Opus tier ile
+     * değerlendirir (bkz. supabase/functions/twin/index.ts MODELS.weekly).
+     * Trigger.MANUAL kullanılır: TwinState.Trigger sabit bir sözleşme,
+     * yalnızca bunun için genişletilmedi (bkz. twin/TwinState.kt notu).
+     */
+    suspend fun runWeeklyReview(): Result<TwinOutput> = runCatching {
+        val state = stateBuilder.build(
+            trigger = Trigger.MANUAL,
+            userNote = "Haftalık seyir analizi: son 14 gecenin uyku/SpO2 eğilimini, " +
+                "bugünkü loglarla karşılaştırarak değerlendir.",
+            snapshotLimit = 14
+        )
+        val output = engine.generate(state, tierOverride = "weekly").getOrThrow()
+        logOutput(Trigger.MANUAL, "weekly", output)
+        output
+    }
+
+    private suspend fun logOutput(trigger: Trigger, tier: String, output: TwinOutput) {
         val userId = currentUserId() ?: return
         runCatching {
             postgrest.from("twin_output_log").insert(
                 TwinOutputLogRow(
                     userId = userId,
                     trigger = trigger.name,
-                    tier = if (trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast",
+                    tier = tier,
                     headline = output.headline,
                     brief = output.brief,
                     rawJson = output.toPayload(),
