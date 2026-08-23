@@ -10,8 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aydin.biyohack.data.repository.AuthRepository
+import com.aydin.biyohack.ui.AppNavHost
 import com.aydin.biyohack.ui.auth.AuthScreen
-import com.aydin.biyohack.ui.dashboard.DashboardScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val isSignedIn by authRepository.isSignedIn.collectAsStateWithLifecycle(initialValue = false)
-                    if (isSignedIn) DashboardScreen() else AuthScreen()
+                    if (isSignedIn) AppNavHost() else AuthScreen()
                 }
             }
         }
