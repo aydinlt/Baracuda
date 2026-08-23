@@ -53,6 +53,10 @@ interface IntakeRecordDao {
 
     @Query("UPDATE intake_entry SET syncState = 'SYNCED' WHERE id = :id")
     suspend fun markSynced(id: String)
+
+    /** Kreatinsiz gün sayacı için — TwinStateBuilder bunu kullanır (bkz. system_twin.md Bölüm E). */
+    @Query("SELECT * FROM intake_entry WHERE label LIKE '%kreatin%' COLLATE NOCASE ORDER BY ts DESC LIMIT 1")
+    suspend fun getLastCreatineLog(): IntakeRecordEntity?
 }
 
 // ════════════════════════════════════════════════════════════

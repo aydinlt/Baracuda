@@ -97,7 +97,11 @@ class DashboardViewModel @Inject constructor(
 }
 
 @Composable
-fun DashboardScreen(onOpenTwin: () -> Unit = {}, viewModel: DashboardViewModel = hiltViewModel()) {
+fun DashboardScreen(
+    onOpenTwin: () -> Unit = {},
+    onOpenLab: () -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel()
+) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
 
     val permissionContract = remember { viewModel.healthConnectManager.requestPermissionsContract() }
@@ -154,6 +158,9 @@ fun DashboardScreen(onOpenTwin: () -> Unit = {}, viewModel: DashboardViewModel =
 
             Button(onClick = onOpenTwin, modifier = Modifier.fillMaxWidth()) {
                 Text("İkize sor")
+            }
+            Button(onClick = onOpenLab, modifier = Modifier.fillMaxWidth()) {
+                Text("Laboratuvar Seyri")
             }
 
             ui.error?.let { Text("Hata: $it") }

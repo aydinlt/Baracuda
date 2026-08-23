@@ -48,13 +48,14 @@ class TwinViewModel @Inject constructor(
     private val _ui = MutableStateFlow(TwinUiState())
     val ui: StateFlow<TwinUiState> = _ui.asStateFlow()
 
-    fun runMorningProtocol() = run(Trigger.MORNING_PROTOCOL)
-    fun runManual() = run(Trigger.MANUAL)
+    fun runMorningProtocol() = run { twinRepository.runProtocol(Trigger.MORNING_PROTOCOL) }
+    fun runManual() = run { twinRepository.runProtocol(Trigger.MANUAL) }
+    fun runWeeklyReview() = run { twinRepository.runWeeklyReview() }
 
-    private fun run(trigger: Trigger) {
+    private fun run(call: suspend () -> Result<TwinOutput>) {
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
-            val result = twinRepository.runProtocol(trigger)
+            val result = call()
             _ui.update {
                 it.copy(
                     isLoading = false,
@@ -93,6 +94,9 @@ fun TwinScreen(onBack: () -> Unit, viewModel: TwinViewModel = hiltViewModel()) {
             }
             Button(onClick = viewModel::runManual, enabled = !ui.isLoading, modifier = Modifier.fillMaxWidth()) {
                 Text("Manuel iste")
+            }
+            Button(onClick = viewModel::runWeeklyReview, enabled = !ui.isLoading, modifier = Modifier.fillMaxWidth()) {
+                Text("Haftalık seyir analizi")
             }
 
             if (ui.isLoading) CircularProgressIndicator()
