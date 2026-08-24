@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,6 +47,7 @@ data class DashboardUiState(
     val today: DailySnapshot? = null,
     val recent: List<DailySnapshot> = emptyList(),
     val todayIntake: List<IntakeRecord> = emptyList(),
+    val waterTargetMl: Int = 4000,
     val isSyncing: Boolean = false,
     val permissionsGranted: Boolean = false,
     val error: String? = null
@@ -77,7 +80,12 @@ class DashboardViewModel @Inject constructor(
         }
         // İlk girişte Supabase'de profil satırı yoksa varsayılanlarla oluşturur.
         viewModelScope.launch {
-            authRepository.currentUserId()?.let { profileRepository.ensureLoaded(it) }
+            authRepository.currentUserId()?.let { userId ->
+                profileRepository.ensureLoaded(userId)
+                profileRepository.observe(userId).collect { profile ->
+                    profile?.let { p -> _ui.update { it.copy(waterTargetMl = p.waterTargetMl) } }
+                }
+            }
         }
     }
 
@@ -200,11 +208,19 @@ fun DashboardScreen(
 
             ui.error?.let { error -> item { Text("Hata: $error") } }
 
-            item { Text("Su hızlı log", style = MaterialTheme.typography.titleMedium) }
             item {
+                val waterMl = ui.todayIntake.filter { it.kind == IntakeKind.WATER }.sumOf { it.amount ?: 0.0 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(250.0, 500.0, 750.0).forEach { ml ->
-                        Button(onClick = { viewModel.logWater(ml) }) { Text("+${ml.toInt()} ml") }
+                    Text("Su hızlı log", style = MaterialTheme.typography.titleMedium)
+                    Text("${waterMl.toInt()} / ${ui.waterTargetMl} ml")
+                    LinearProgressIndicator(
+                        progress = { (waterMl / ui.waterTargetMl).toFloat().coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(250.0, 500.0, 750.0).forEach { ml ->
+                            Button(onClick = { viewModel.logWater(ml) }) { Text("+${ml.toInt()} ml") }
+                        }
                     }
                 }
             }
