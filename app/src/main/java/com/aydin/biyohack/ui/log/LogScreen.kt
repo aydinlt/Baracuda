@@ -104,7 +104,14 @@ class LogViewModel @Inject constructor(
 
 private data class SupplementPreset(val label: String, val amount: Double? = null, val unit: String? = null)
 
-/** system_twin.md Bölüm E — takviye zamanlama matrisindeki kalemler. */
+/**
+ * system_twin.md Bölüm E — takviye zamanlama matrisindeki kalemler.
+ *
+ * Uric Acid Support, R-lipoik asit ve Elektrolit önceden eksikti — Bölüm E'de
+ * kendi zamanlama/ara kurallarıyla (ör. "Uric Acid Support 1–2 hafta ara")
+ * adı geçtikleri, hatta Elektrolit'i TwinGuardrails'in kendisi "sauna
+ * planlıysa zorunlu" diye işaretlediği halde loglamanın hiçbir yolu yoktu.
+ */
 private val SUPPLEMENT_PRESETS = listOf(
     SupplementPreset("NR/NAD"),
     SupplementPreset("D3+K2"),
@@ -113,7 +120,10 @@ private val SUPPLEMENT_PRESETS = listOf(
     SupplementPreset("AMPK/Berberin"),
     SupplementPreset("Magnezyum glisinat"),
     SupplementPreset("Glisin", amount = 3.0, unit = "g"),
-    SupplementPreset("Kreatin", amount = 5.0, unit = "g")
+    SupplementPreset("Kreatin", amount = 5.0, unit = "g"),
+    SupplementPreset("Uric Acid Support"),
+    SupplementPreset("R-lipoik asit"),
+    SupplementPreset("Elektrolit")
 )
 
 @Composable
