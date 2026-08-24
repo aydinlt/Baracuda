@@ -3,6 +3,7 @@ package com.aydin.biyohack.ui.dashboard
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -211,7 +213,13 @@ fun DashboardScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { /* sonucu göz ardı edilir — reddedilirse TwinNotifier sessizce atlar */ }
     LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        // Önceden izin durumu hiç kontrol edilmeden her Dashboard'a her dönüşte
+        // (nav geri dönüşü composable'ı yeniden oluşturuyor) sistem izin
+        // sözleşmesi yeniden tetikleniyordu — izin zaten verilmişse gereksizdi.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
@@ -333,7 +341,9 @@ fun DashboardScreen(
                 Button(onClick = onOpenBodyMetric, modifier = Modifier.fillMaxWidth()) { Text("Kilo / Bel Çevresi") }
             }
 
-            ui.error?.let { error -> item { Text("Hata: $error") } }
+            ui.error?.let { error ->
+                item { Text("Hata: $error", color = MaterialTheme.colorScheme.error) }
+            }
 
             item {
                 val waterMl = ui.todayIntake.filter { it.kind == IntakeKind.WATER }.sumOf { it.amount ?: 0.0 }
