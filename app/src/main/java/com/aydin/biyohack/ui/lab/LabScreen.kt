@@ -45,7 +45,8 @@ import javax.inject.Inject
 
 data class LabUiState(
     val results: List<LabResult> = emptyList(),
-    val flags: List<ClinicalFlagRecord> = emptyList()
+    val flags: List<ClinicalFlagRecord> = emptyList(),
+    val error: String? = null
 )
 
 @HiltViewModel
@@ -64,25 +65,40 @@ class LabViewModel @Inject constructor(
         }
     }
 
+    // Önceden bu dört fonksiyondan hiçbiri hatayı UI'a taşımıyordu — özellikle
+    // deleteResult önce Supabase'den silmeyi denediği için (bkz. HealthSyncRepository.
+    // deleteLabResult), offline'ken "Sil" butonuna basmak sessizce hiçbir şey
+    // yapmıyormuş gibi görünüyordu, kullanıcı ne olduğunu anlamıyordu.
+
     fun addResult(
         panel: String, marker: String, value: Double, unit: String?,
         refLow: Double?, refHigh: Double?, takenAt: LocalDate
     ) {
         viewModelScope.launch {
-            repository.addLabResult(panel, marker, value, unit, refLow, refHigh, takenAt)
+            val result = repository.addLabResult(panel, marker, value, unit, refLow, refHigh, takenAt)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
         }
     }
 
     fun addFlag(finding: String, status: String) {
-        viewModelScope.launch { repository.addClinicalFlag(finding, status) }
+        viewModelScope.launch {
+            val result = repository.addClinicalFlag(finding, status)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
     }
 
     fun resolveFlag(id: String) {
-        viewModelScope.launch { repository.resolveClinicalFlag(id) }
+        viewModelScope.launch {
+            val result = repository.resolveClinicalFlag(id)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
     }
 
     fun deleteResult(id: String) {
-        viewModelScope.launch { repository.deleteLabResult(id) }
+        viewModelScope.launch {
+            val result = repository.deleteLabResult(id)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
     }
 }
 
@@ -116,6 +132,10 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            ui.error?.let { error ->
+                item { Text("Hata: $error", color = MaterialTheme.colorScheme.error) }
+            }
+
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
