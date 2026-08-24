@@ -1,6 +1,9 @@
 package com.aydin.biyohack.ui.dashboard
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -111,6 +114,16 @@ fun DashboardScreen(
 
     LaunchedEffect(Unit) {
         if (!ui.permissionsGranted) permissionLauncher.launch(HealthConnectManager.PERMISSIONS)
+    }
+
+    // Sabah protokolü bildirimi için — TwinMorningWorker'ın gösterebilmesi bu izne bağlı.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* sonucu göz ardı edilir — reddedilirse TwinNotifier sessizce atlar */ }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     Scaffold { padding ->

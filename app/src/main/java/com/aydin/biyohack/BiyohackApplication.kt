@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.aydin.biyohack.sync.HealthSyncWorker
+import com.aydin.biyohack.sync.TwinMorningWorker
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -20,5 +21,6 @@ class BiyohackApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         HealthSyncWorker.schedulePeriodic(this)
+        TwinMorningWorker.scheduleNext(this)
     }
 }
