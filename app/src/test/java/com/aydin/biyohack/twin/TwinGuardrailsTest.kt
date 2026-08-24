@@ -103,6 +103,53 @@ class TwinGuardrailsTest {
         assertTrue(facts.any { it.contains("Su geride") })
     }
 
+    // ── buildFacts: kullanıcının Ayarlar'daki gerçek hedefleri (Hafta 21) ──
+    // Bu dört parametre eklendiğinden beri hiçbir test onları gerçekten geçmiyordu —
+    // yalnızca varsayılan (parametresiz) çağrının hâlâ çalıştığı test ediliyordu.
+    // Aşağıdakiler override'ların gerçekten etkili olduğunu doğrular; aksi halde
+    // biri satır içinde yanlışlıkla sabiti (ör. WATER_TARGET_ML) kullanmaya geri
+    // dönse bile hiçbir test bunu yakalamazdı.
+
+    @Test
+    fun `ozel su hedefi esik hesabini degistirir`() {
+        // Saat 15:00, wakeTarget varsayılan 7 → hoursAwake = 8.
+        // Varsayılan hedef 4000 ml: expected = 4000*8/15 ≈ 2133, %70'i ≈ 1493 →
+        // 1000 ml bunun altında kalır → "Su geride".
+        // Özel hedef 1000 ml: expected = 1000*8/15 ≈ 533, %70'i ≈ 373 →
+        // 1000 ml bunun çok üstünde → "Su durumu uygun".
+        val s = state(
+            now = at(15, 0),
+            todayIntake = listOf(IntakeEntry(at(9, 0), IntakeType.WATER, "Su", amount = 1000.0, unit = "ml"))
+        )
+        assertTrue(TwinGuardrails.buildFacts(s).any { it.contains("Su geride") })
+
+        val customFacts = TwinGuardrails.buildFacts(s, waterTargetMl = 1000)
+        assertTrue(customFacts.any { it.contains("Su durumu uygun") && it.contains("1000 ml") })
+    }
+
+    @Test
+    fun `ozel protein hedefi hatirlatma metnini degistirir`() {
+        val s = state(now = at(19, 0)) // öğün yok, saat >= 18
+        val defaultFacts = TwinGuardrails.buildFacts(s)
+        assertTrue(defaultFacts.any { it.contains("140") && it.contains("170") })
+
+        val customFacts = TwinGuardrails.buildFacts(s, proteinMinG = 100, proteinMaxG = 130)
+        assertTrue(customFacts.any { it.contains("100") && it.contains("130") })
+        assertTrue(customFacts.none { it.contains("140") })
+    }
+
+    @Test
+    fun `ozel kalkis hedefi sapma esigini degistirir`() {
+        // Kalkış 09:00. Varsayılan hedef 7 → izinli aralık 6..8 → 9 dışarıda, sapma
+        // fact'i üretilir. Özel hedef 9 → izinli aralık 8..10 → 9 içeride, üretilmez.
+        val snapshot = DailySnapshot(userId = "u1", date = today.minusDays(1), wakeTime = at(9, 0))
+        val s = state(now = at(10, 0), lastNight = snapshot)
+        assertTrue(TwinGuardrails.buildFacts(s).any { it.contains("hedefinden sapma") })
+
+        val customFacts = TwinGuardrails.buildFacts(s, wakeTargetHour = 9)
+        assertTrue(customFacts.none { it.contains("hedefinden sapma") })
+    }
+
     // ── buildFacts: kreatin / test öncesi ara ──
 
     @Test
