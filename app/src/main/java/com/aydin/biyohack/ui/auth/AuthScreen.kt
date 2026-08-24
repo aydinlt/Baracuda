@@ -32,14 +32,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class AuthMode { SIGN_IN, SIGN_UP }
+enum class AuthMode { SIGN_IN, SIGN_UP, RESET }
 
 data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val mode: AuthMode = AuthMode.SIGN_IN,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val resetEmailSent: Boolean = false
 )
 
 @HiltViewModel
@@ -57,8 +58,17 @@ class AuthViewModel @Inject constructor(
         it.copy(mode = if (it.mode == AuthMode.SIGN_IN) AuthMode.SIGN_UP else AuthMode.SIGN_IN, error = null)
     }
 
+    /** "Şifremi unuttum" bağlantısı — yalnızca SIGN_IN modundan erişilebilir. */
+    fun openReset() = _ui.update { it.copy(mode = AuthMode.RESET, error = null, resetEmailSent = false) }
+
+    fun backToSignIn() = _ui.update { it.copy(mode = AuthMode.SIGN_IN, error = null, resetEmailSent = false) }
+
     fun submit() {
         val state = _ui.value
+        if (state.mode == AuthMode.RESET) {
+            submitReset(state)
+            return
+        }
         if (state.email.isBlank() || state.password.isBlank()) {
             _ui.update { it.copy(error = "E-posta ve şifre gerekli") }
             return
@@ -70,6 +80,31 @@ class AuthViewModel @Inject constructor(
             else
                 authRepository.signUp(state.email, state.password)
             _ui.update { it.copy(isLoading = false, error = result.exceptionOrNull()?.message) }
+        }
+    }
+
+    /**
+     * Uygulamanın önceden hiç şifre sıfırlama yolu yoktu — şifresini unutan
+     * tek kullanıcı (Aydın) kalıcı olarak dışarıda kalırdı. Supabase Auth'un
+     * `resetPasswordForEmail`'i, hesap varsa sıfırlama bağlantısını e-postayla
+     * gönderir; var olup olmadığını burada açık etmemek için sonuç mesajı
+     * her durumda aynı ("bağlantı gönderildiyse gelen kutunu kontrol et").
+     */
+    private fun submitReset(state: AuthUiState) {
+        if (state.email.isBlank()) {
+            _ui.update { it.copy(error = "E-posta gerekli") }
+            return
+        }
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true, error = null) }
+            val result = authRepository.sendPasswordReset(state.email)
+            _ui.update {
+                it.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.message,
+                    resetEmailSent = result.isSuccess
+                )
+            }
         }
     }
 }
@@ -87,6 +122,39 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Baracuda", style = MaterialTheme.typography.headlineMedium)
+
+            if (ui.mode == AuthMode.RESET) {
+                Text("Şifremi sıfırla", style = MaterialTheme.typography.titleMedium)
+
+                OutlinedTextField(
+                    value = ui.email,
+                    onValueChange = viewModel::onEmailChange,
+                    label = { Text("E-posta") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                ui.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (ui.resetEmailSent) {
+                    Text(
+                        "Hesap varsa sıfırlama bağlantısı gönderildi — gelen kutunu kontrol et.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                Button(
+                    onClick = viewModel::submit,
+                    enabled = !ui.isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (ui.isLoading) CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
+                    Text(if (ui.isLoading) "..." else "Sıfırlama bağlantısı gönder")
+                }
+
+                TextButton(onClick = viewModel::backToSignIn) { Text("← Giriş ekranına dön") }
+                return@Scaffold
+            }
+
             Text(
                 if (ui.mode == AuthMode.SIGN_IN) "Giriş yap" else "Hesap oluştur",
                 style = MaterialTheme.typography.titleMedium
@@ -120,6 +188,10 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
                     if (ui.isLoading) "..."
                     else if (ui.mode == AuthMode.SIGN_IN) "Giriş yap" else "Kayıt ol"
                 )
+            }
+
+            if (ui.mode == AuthMode.SIGN_IN) {
+                TextButton(onClick = viewModel::openReset) { Text("Şifremi unuttum") }
             }
 
             TextButton(onClick = viewModel::toggleMode) {
