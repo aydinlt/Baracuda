@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -37,7 +39,9 @@ import javax.inject.Inject
 data class TwinUiState(
     val isLoading: Boolean = false,
     val output: TwinOutput? = null,
-    val error: String? = null
+    val error: String? = null,
+    val plannedTrainingToday: Boolean = false,
+    val saunaPlannedToday: Boolean = false
 )
 
 @HiltViewModel
@@ -48,8 +52,19 @@ class TwinViewModel @Inject constructor(
     private val _ui = MutableStateFlow(TwinUiState())
     val ui: StateFlow<TwinUiState> = _ui.asStateFlow()
 
-    fun runMorningProtocol() = run { twinRepository.runProtocol(Trigger.MORNING_PROTOCOL) }
-    fun runManual() = run { twinRepository.runProtocol(Trigger.MANUAL) }
+    fun toggleTraining(planned: Boolean) = _ui.update { it.copy(plannedTrainingToday = planned) }
+    fun toggleSauna(planned: Boolean) = _ui.update { it.copy(saunaPlannedToday = planned) }
+
+    fun runMorningProtocol() = run {
+        val s = _ui.value
+        twinRepository.runProtocol(Trigger.MORNING_PROTOCOL, plannedTrainingToday = s.plannedTrainingToday, saunaPlannedToday = s.saunaPlannedToday)
+    }
+
+    fun runManual() = run {
+        val s = _ui.value
+        twinRepository.runProtocol(Trigger.MANUAL, plannedTrainingToday = s.plannedTrainingToday, saunaPlannedToday = s.saunaPlannedToday)
+    }
+
     fun runWeeklyReview() = run { twinRepository.runWeeklyReview() }
 
     private fun run(call: suspend () -> Result<TwinOutput>) {
@@ -89,6 +104,25 @@ fun TwinScreen(onBack: () -> Unit, onOpenHistory: () -> Unit = {}, viewModel: Tw
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // TwinGuardrails bu iki bayrağa göre antrenman/sauna-yatış aralığı kuralları
+            // üretiyor (bkz. TwinGuardrails.kt) — protokolü çalıştırmadan önce sorulmalı.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text("Bugün antrenman planlı")
+                Switch(checked = ui.plannedTrainingToday, onCheckedChange = viewModel::toggleTraining)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text("Bugün sauna planlı")
+                Switch(checked = ui.saunaPlannedToday, onCheckedChange = viewModel::toggleSauna)
+            }
+
             Button(onClick = viewModel::runMorningProtocol, enabled = !ui.isLoading, modifier = Modifier.fillMaxWidth()) {
                 Text("Sabah protokolünü çalıştır")
             }
