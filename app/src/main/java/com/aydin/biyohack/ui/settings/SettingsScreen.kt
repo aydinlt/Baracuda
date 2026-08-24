@@ -164,6 +164,11 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Önceden bu buton alan içerikleri geçersizken bile her zaman aktifti —
+            // tıklamak return@Button'a düşüp sessizce hiçbir şey yapmıyordu, LabScreen'in
+            // "Tahlil tarihi" alanındakinin aksine (bkz. Hafta 18) hiçbir görsel geri
+            // bildirim yoktu.
+            val wakeValid = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.isSuccess
             Button(
                 onClick = {
                     val w = waterTarget.toIntOrNull() ?: return@Button
@@ -172,7 +177,11 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     val wake = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.getOrNull() ?: return@Button
                     viewModel.save(w, pMin, pMax, wake)
                 },
-                enabled = !ui.isSaving && ui.profile != null,
+                enabled = !ui.isSaving && ui.profile != null &&
+                    waterTarget.toIntOrNull() != null &&
+                    proteinMin.toIntOrNull() != null &&
+                    proteinMax.toIntOrNull() != null &&
+                    wakeValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (ui.isSaving) "Kaydediliyor..." else "Kaydet")
