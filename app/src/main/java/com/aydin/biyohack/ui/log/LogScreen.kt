@@ -46,7 +46,8 @@ data class LogUiState(
     val lastLogged: String? = null,
     val error: String? = null,
     val proteinTargetMinG: Int = 140,
-    val proteinTargetMaxG: Int = 170
+    val proteinTargetMaxG: Int = 170,
+    val creatineFreeDays: Int = 0
 )
 
 @HiltViewModel
@@ -72,6 +73,17 @@ class LogViewModel @Inject constructor(
                 }
             }
         }
+        // creatineFreeDays TwinGuardrails/TwinStateBuilder'a besleniyordu ama hiçbir
+        // ekranda gösterilmiyordu — kullanıcı kreatinsiz gün sayacını yalnızca İkiz'e
+        // sorup Cistatin C testi bekliyorsa şans eseri görebiliyordu.
+        refreshCreatineFreeDays()
+    }
+
+    private fun refreshCreatineFreeDays() {
+        viewModelScope.launch {
+            val days = repository.creatineFreeDays()
+            _ui.update { it.copy(creatineFreeDays = days) }
+        }
     }
 
     fun log(kind: IntakeKind, label: String, amount: Double? = null, unit: String? = null) {
@@ -83,6 +95,9 @@ class LogViewModel @Inject constructor(
                     error = result.exceptionOrNull()?.message
                 )
             }
+            // Kreatin loglandıysa sayaç sıfırlanır — creatineFreeDays son kreatin
+            // logundan bu yana geçen gün sayısıdır (bkz. HealthSyncRepository).
+            if (result.isSuccess) refreshCreatineFreeDays()
         }
     }
 }
@@ -164,6 +179,10 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Takviye", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Kreatinsiz gün: ${ui.creatineFreeDays}",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 SUPPLEMENT_PRESETS.forEach { preset ->
                     OutlinedButton(
                         onClick = { viewModel.log(IntakeKind.SUPPLEMENT, preset.label, preset.amount, preset.unit) },
