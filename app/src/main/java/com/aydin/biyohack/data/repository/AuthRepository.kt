@@ -32,5 +32,18 @@ class AuthRepository(private val auth: Auth) {
 
     suspend fun signOut(): Result<Unit> = runCatching { auth.signOut() }
 
+    /**
+     * Şifre sıfırlama bağlantısını e-postayla gönderir. Daha önce hiç
+     * sıfırlama yolu yoktu — şifresini unutan kullanıcı kalıcı olarak
+     * dışarıda kalırdı. Redirect URL kasıtlı olarak verilmedi: uygulamanın
+     * şifre-sıfırlama deep link'ini yakalayacak bir ekranı yok, bu yüzden
+     * kullanıcı Supabase'in varsayılan sıfırlama sayfasını (proje Auth
+     * ayarlarındaki Site URL) kullanıp ardından uygulamada yeni şifreyle
+     * tekrar giriş yapar.
+     */
+    suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
+        auth.resetPasswordForEmail(email)
+    }
+
     fun currentUserId(): String? = auth.currentUserOrNull()?.id
 }
