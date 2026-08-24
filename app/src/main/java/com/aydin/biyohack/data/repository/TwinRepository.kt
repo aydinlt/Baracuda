@@ -6,6 +6,7 @@ import com.aydin.biyohack.twin.TwinStateBuilder
 import com.aydin.biyohack.twin.Trigger
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -14,11 +15,17 @@ import kotlinx.serialization.Serializable
  * — TwinGuardrails'in hangi action'ları düşürdüğü, hangi clinical_flag'i
  * eklediği (bkz. TwinOutput.violations) denetlenebilir kalsın diye.
  * Arşivleme best-effort'tur: başarısız olursa protokol çıktısını etkilemez.
+ *
+ * Ayrıca `output.clinicalFlags`'i [HealthSyncRepository]'nin `clinical_flag`
+ * tablosuna yazar — aksi halde bu bayraklar yalnızca TwinScreen'de bir kez
+ * gösterilip kaybolurdu, `LabScreen`'deki "Klinik bayraklar" bölümüne hiç
+ * düşmezdi ve [TwinStateBuilder.pendingTests] onları hiç göremezdi.
  */
 class TwinRepository(
     private val stateBuilder: TwinStateBuilder,
     private val engine: TwinEngine,
     private val postgrest: Postgrest,
+    private val healthSyncRepository: HealthSyncRepository,
     private val currentUserId: suspend () -> String?
 ) {
     suspend fun runProtocol(
@@ -31,6 +38,7 @@ class TwinRepository(
         val tier = if (trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast"
         val output = engine.generate(state).getOrThrow()
         logOutput(trigger, tier, output)
+        persistClinicalFlags(output)
         output
     }
 
@@ -49,7 +57,19 @@ class TwinRepository(
         )
         val output = engine.generate(state, tierOverride = "weekly").getOrThrow()
         logOutput(Trigger.MANUAL, "weekly", output)
+        persistClinicalFlags(output)
         output
+    }
+
+    /** Aynı bulguyu (finding) tekrar tekrar eklememek için açık bayraklarla karşılaştırır. */
+    private suspend fun persistClinicalFlags(output: TwinOutput) {
+        if (output.clinicalFlags.isEmpty()) return
+        runCatching {
+            val existingFindings = healthSyncRepository.observeUnresolvedFlags().first().map { it.finding }
+            output.clinicalFlags
+                .filter { it.finding !in existingFindings }
+                .forEach { healthSyncRepository.addClinicalFlag(it.finding, it.status, it.action) }
+        }
     }
 
     /**
