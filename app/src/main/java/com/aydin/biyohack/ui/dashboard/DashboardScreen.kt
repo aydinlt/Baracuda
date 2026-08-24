@@ -1,6 +1,9 @@
 package com.aydin.biyohack.ui.dashboard
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -42,6 +46,7 @@ import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.repository.AuthRepository
 import com.aydin.biyohack.data.repository.HealthSyncRepository
 import com.aydin.biyohack.data.repository.ProfileRepository
+import com.aydin.biyohack.health.HealthConnectAvailability
 import com.aydin.biyohack.health.HealthConnectManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +66,7 @@ data class DashboardUiState(
     val proteinTargetMaxG: Int = 170,
     val isSyncing: Boolean = false,
     val permissionsGranted: Boolean = false,
+    val healthConnectAvailability: HealthConnectAvailability = HealthConnectAvailability.INSTALLED,
     val error: String? = null
 )
 
@@ -96,7 +102,16 @@ class DashboardViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            _ui.update { it.copy(permissionsGranted = healthConnectManager.hasAllPermissions()) }
+            _ui.update {
+                it.copy(
+                    permissionsGranted = healthConnectManager.hasAllPermissions(),
+                    // Önceden cihazda Health Connect kurulu değilse (ör. eski bir telefon,
+                    // provider güncellemesi gerekiyor) "İzin ver" butonu hiçbir işe yaramayan
+                    // bir izin akışı başlatmaya çalışıyordu — kullanıcıya ne yapması
+                    // gerektiğini söyleyen bir yol hiç yoktu.
+                    healthConnectAvailability = healthConnectManager.availability()
+                )
+            }
         }
         // İlk girişte Supabase'de profil satırı yoksa varsayılanlarla oluşturur.
         viewModelScope.launch {
@@ -176,13 +191,19 @@ fun DashboardScreen(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showManualSleepDialog by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val permissionContract = remember { viewModel.healthConnectManager.requestPermissionsContract() }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = permissionContract
     ) { granted -> viewModel.onPermissionsResult(granted) }
 
-    LaunchedEffect(Unit) {
-        if (!ui.permissionsGranted) permissionLauncher.launch(HealthConnectManager.PERMISSIONS)
+    // Health Connect kurulu değilse izin sözleşmesini başlatmanın anlamı yok —
+    // ui.healthConnectAvailability yüklendiğinde yeniden değerlendirilir (ViewModel'in
+    // ilk state'i iyimser INSTALLED varsayıyor, gerçek değer async yüklenir).
+    LaunchedEffect(ui.permissionsGranted, ui.healthConnectAvailability) {
+        if (!ui.permissionsGranted && ui.healthConnectAvailability == HealthConnectAvailability.INSTALLED) {
+            permissionLauncher.launch(HealthConnectManager.PERMISSIONS)
+        }
     }
 
     // Sabah protokolü bildirimi için — TwinMorningWorker'ın gösterebilmesi bu izne bağlı.
@@ -209,9 +230,38 @@ fun DashboardScreen(
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Health Connect izni verilmedi.")
-                            Button(onClick = { permissionLauncher.launch(HealthConnectManager.PERMISSIONS) }) {
-                                Text("İzin ver")
+                            when (ui.healthConnectAvailability) {
+                                HealthConnectAvailability.INSTALLED -> {
+                                    Text("Health Connect izni verilmedi.")
+                                    Button(onClick = { permissionLauncher.launch(HealthConnectManager.PERMISSIONS) }) {
+                                        Text("İzin ver")
+                                    }
+                                }
+                                HealthConnectAvailability.NOT_INSTALLED -> {
+                                    Text("Health Connect uygulaması kurulu değil ya da güncellenmesi gerekiyor.")
+                                    Button(onClick = {
+                                        val uri = Uri.parse("market://details?id=com.google.android.apps.healthdata")
+                                        try {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                        } catch (e: ActivityNotFoundException) {
+                                            context.startActivity(
+                                                Intent(
+                                                    Intent.ACTION_VIEW,
+                                                    Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata")
+                                                )
+                                            )
+                                        }
+                                    }) {
+                                        Text("Play Store'da aç")
+                                    }
+                                }
+                                HealthConnectAvailability.NOT_SUPPORTED -> {
+                                    Text(
+                                        "Bu cihaz Health Connect'i desteklemiyor — uyku verisi otomatik " +
+                                            "senkronize edilemez. \"Bu gece\" kartındaki \"Uyku süresini elle gir\" " +
+                                            "ile devam edebilirsin."
+                                    )
+                                }
                             }
                         }
                     }
