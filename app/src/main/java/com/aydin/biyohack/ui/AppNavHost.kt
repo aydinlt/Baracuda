@@ -1,6 +1,7 @@
 package com.aydin.biyohack.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -20,10 +21,18 @@ private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_LOG = "log"
 private const val ROUTE_BODY_METRIC = "body_metric"
 
-/** Oturum açıkken gösterilen ekranlar arası geçiş. Auth ekranı MainActivity'de ayrı tutulur. */
+/**
+ * Oturum açıkken gösterilen ekranlar arası geçiş. Auth ekranı MainActivity'de ayrı tutulur.
+ *
+ * @param openTwin TwinNotifier'ın "sabah protokolü" bildirimine dokunulduğunda true —
+ * grafik Dashboard'da başladıktan hemen sonra İkiz ekranına yönlendirilir.
+ */
 @Composable
-fun AppNavHost() {
+fun AppNavHost(openTwin: Boolean = false) {
     val navController = rememberNavController()
+    LaunchedEffect(openTwin) {
+        if (openTwin) navController.navigate(ROUTE_TWIN)
+    }
     NavHost(navController = navController, startDestination = ROUTE_DASHBOARD) {
         composable(ROUTE_DASHBOARD) {
             DashboardScreen(

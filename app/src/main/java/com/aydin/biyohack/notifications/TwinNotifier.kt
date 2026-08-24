@@ -4,12 +4,15 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.aydin.biyohack.MainActivity
 import com.aydin.biyohack.twin.TwinOutput
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -24,6 +27,10 @@ private const val NOTIFICATION_ID = 1001
  * Bölüm 5: "clinical domainli hiçbir action bildirime çıkmaz. clinical_flags
  * yalnızca içeride gösterilir"). Aksiyonlar da bildirime taşınmaz, sadece
  * kullanıcıyı İkiz ekranını açmaya yönlendirir — detay orada.
+ *
+ * ÖNEMLİ: Bu yönlendirme yorumda vardı ama hiç uygulanmamıştı — bildirime
+ * `PendingIntent` hiç eklenmemişti, dokunmak yalnızca bildirimi kapatıyordu
+ * (`setAutoCancel`). Artık MainActivity'yi `EXTRA_OPEN_TWIN` ile açıyor.
  */
 @Singleton
 class TwinNotifier @Inject constructor(
@@ -47,11 +54,23 @@ class TwinNotifier @Inject constructor(
                 != PackageManager.PERMISSION_GRANTED
         ) return
 
+        val openTwinIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(MainActivity.EXTRA_OPEN_TWIN, true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            NOTIFICATION_ID,
+            openTwinIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(output.headline)
             .setContentText(output.brief)
             .setStyle(NotificationCompat.BigTextStyle().bigText(output.brief))
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
