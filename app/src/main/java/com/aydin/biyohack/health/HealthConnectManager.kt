@@ -7,6 +7,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.aydin.biyohack.data.DailySnapshot
@@ -140,21 +141,30 @@ class HealthConnectManager(private val context: Context) : HealthDataSource {
         )
     }
 
-    /** Bugün 00:00'dan şu ana kadarki StepsRecord'ları toplar. İzin yoksa/kayıt yoksa null. */
+    /**
+     * Bugün 00:00'dan şu ana kadarki toplam adım. İzin yoksa/kayıt yoksa null.
+     *
+     * ÖNEMLİ: `readRecords` ile tek tek StepsRecord'ları çekip `sumOf` ile elle
+     * toplamak YANLIŞTIR — telefon ve saat (Galaxy Watch, Samsung Health
+     * entegrasyonu üzerinden) aynı zaman aralığı için örtüşen kayıtlar
+     * yazabilir, elle toplama bunları iki kez sayar. Health Connect'in
+     * `aggregate` API'si (`StepsRecord.COUNT_TOTAL`) kaynaklar arası
+     * örtüşmeyi resmi olarak tekilleştirir — adım toplamı için önerilen
+     * yol budur.
+     */
     override suspend fun readTodaySteps(): Long? {
         val c = client ?: return null
         val zone = ZoneId.systemDefault()
         val startOfDay = LocalDate.now().atStartOfDay(zone).toInstant()
         val now = Instant.now()
 
-        val records = c.readRecords(
-            ReadRecordsRequest(
-                recordType = StepsRecord::class,
+        val result = c.aggregate(
+            AggregateRequest(
+                metrics = setOf(StepsRecord.COUNT_TOTAL),
                 timeRangeFilter = TimeRangeFilter.between(startOfDay, now)
             )
-        ).records
-
-        return records.sumOf { it.count }
+        )
+        return result[StepsRecord.COUNT_TOTAL]
     }
 
     companion object {

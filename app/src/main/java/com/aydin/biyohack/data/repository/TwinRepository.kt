@@ -86,12 +86,19 @@ class TwinRepository(
         output
     }
 
-    /** Aynı bulguyu (finding) tekrar tekrar eklememek için açık bayraklarla karşılaştırır. */
+    /**
+     * Aynı bulguyu (finding) tekrar tekrar eklememek için açık bayraklarla karşılaştırır.
+     * `distinctBy` ayrıca AYNI TwinOutput içinde (ör. birden fazla action aynı finding'e
+     * düşürülüp bayraklandığında — bkz. TwinGuardrails.filter) birebir aynı finding'in
+     * tek bir toplu işlemde iki kez eklenmesini önler; önceki hâlde yalnızca önceden var
+     * olan bayraklara bakılıyordu, aynı partinin içindeki tekrarlar hiç süzülmüyordu.
+     */
     private suspend fun persistClinicalFlags(output: TwinOutput) {
         if (output.clinicalFlags.isEmpty()) return
         runCatching {
             val existingFindings = healthSyncRepository.observeUnresolvedFlags().first().map { it.finding }
             output.clinicalFlags
+                .distinctBy { it.finding }
                 .filter { it.finding !in existingFindings }
                 .forEach { healthSyncRepository.addClinicalFlag(it.finding, it.status, it.action) }
         }

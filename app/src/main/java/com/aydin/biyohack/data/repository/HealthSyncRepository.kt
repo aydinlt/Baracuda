@@ -19,10 +19,16 @@ import com.aydin.biyohack.data.remote.toDomain
 import com.aydin.biyohack.data.remote.toRow
 import com.aydin.biyohack.health.HealthDataSource
 import io.github.jan.supabase.postgrest.Postgrest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
@@ -44,13 +50,33 @@ class HealthSyncRepository(
     fun observeRecentSnapshots(limit: Int = 14): Flow<List<DailySnapshot>> =
         dailySnapshotDao.observeRecent(limit).map { list -> list.map { it.toDomain() } }
 
-    fun observeTodayIntake(): Flow<List<IntakeRecord>> {
-        val startOfDay = LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault())
-            .toInstant().toEpochMilli()
-        val endOfDay = LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault())
-            .toInstant().toEpochMilli()
-        return intakeRecordDao.observeBetween(startOfDay, endOfDay)
-            .map { list -> list.map { it.toDomain() } }
+    /**
+     * ÖNEMLİ: "bugün" sınırı önceden bu fonksiyon ÇAĞRILDIĞI anda tek seferlik
+     * hesaplanıyordu. DashboardViewModel gibi uzun ömürlü bir collector Activity
+     * yeniden oluşturulmadan gece yarısını geçerse, Room'un Flow'u tablo
+     * değişmediği sürece hiç yeniden emit etmediği için "bugünkü loglar" listesi
+     * sessizce dünün penceresinde kilitli kalırdı — su/protein ilerleme çubukları
+     * ve TwinGuardrails'e giden todayIntake de aynı şekilde yanlış günü gösterirdi.
+     * [dateChangeTicker] her gece yarısı yeni bir tarih yayınlayıp alt sorguyu
+     * [flatMapLatest] ile yeniden kurar.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeTodayIntake(): Flow<List<IntakeRecord>> =
+        dateChangeTicker().flatMapLatest { today ->
+            val zone = ZoneId.systemDefault()
+            val startOfDay = today.atStartOfDay(zone).toInstant().toEpochMilli()
+            val endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            intakeRecordDao.observeBetween(startOfDay, endOfDay)
+        }.map { list -> list.map { it.toDomain() } }
+
+    private fun dateChangeTicker(): Flow<LocalDate> = flow {
+        while (true) {
+            val today = LocalDate.now()
+            emit(today)
+            val zone = ZoneId.systemDefault()
+            val nextMidnight = today.plusDays(1).atStartOfDay(zone)
+            delay(Duration.between(ZonedDateTime.now(zone), nextMidnight).toMillis().coerceAtLeast(1_000))
+        }
     }
 
     fun observeLabResults(): Flow<List<LabResult>> =

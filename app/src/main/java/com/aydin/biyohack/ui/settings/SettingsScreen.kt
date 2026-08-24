@@ -167,21 +167,24 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             // Önceden bu buton alan içerikleri geçersizken bile her zaman aktifti —
             // tıklamak return@Button'a düşüp sessizce hiçbir şey yapmıyordu, LabScreen'in
             // "Tahlil tarihi" alanındakinin aksine (bkz. Hafta 18) hiçbir görsel geri
-            // bildirim yoktu.
+            // bildirim yoktu. Ayrıca yalnızca "sayı mı" kontrol ediliyordu — 0 ya da
+            // negatif bir hedef de geçerli sayılıyordu, bu da DashboardScreen'deki
+            // su/protein ilerleme çubuklarında (miktar / hedef) sıfıra bölme/NaN'a
+            // yol açabilirdi. Artık hedeflerin pozitif olması da şart.
             val wakeValid = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.isSuccess
+            val waterValid = (waterTarget.toIntOrNull() ?: 0) > 0
+            val proteinMinValid = (proteinMin.toIntOrNull() ?: 0) > 0
+            val proteinMaxValid = (proteinMax.toIntOrNull() ?: 0) > 0
             Button(
                 onClick = {
-                    val w = waterTarget.toIntOrNull() ?: return@Button
-                    val pMin = proteinMin.toIntOrNull() ?: return@Button
-                    val pMax = proteinMax.toIntOrNull() ?: return@Button
+                    val w = waterTarget.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
+                    val pMin = proteinMin.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
+                    val pMax = proteinMax.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
                     val wake = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.getOrNull() ?: return@Button
                     viewModel.save(w, pMin, pMax, wake)
                 },
                 enabled = !ui.isSaving && ui.profile != null &&
-                    waterTarget.toIntOrNull() != null &&
-                    proteinMin.toIntOrNull() != null &&
-                    proteinMax.toIntOrNull() != null &&
-                    wakeValid,
+                    waterValid && proteinMinValid && proteinMaxValid && wakeValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (ui.isSaving) "Kaydediliyor..." else "Kaydet")
