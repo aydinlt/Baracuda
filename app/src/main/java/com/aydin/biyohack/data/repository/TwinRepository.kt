@@ -26,6 +26,7 @@ class TwinRepository(
     private val engine: TwinEngine,
     private val postgrest: Postgrest,
     private val healthSyncRepository: HealthSyncRepository,
+    private val profileRepository: ProfileRepository,
     private val currentUserId: suspend () -> String?
 ) {
     suspend fun runProtocol(
@@ -36,11 +37,27 @@ class TwinRepository(
     ): Result<TwinOutput> = runCatching {
         val state = stateBuilder.build(trigger, userNote, plannedTrainingToday, saunaPlannedToday)
         val tier = if (trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast"
-        val output = engine.generate(state).getOrThrow()
+        val profile = currentProfile()
+        val output = engine.generate(
+            state,
+            waterTargetMl = profile?.waterTargetMl,
+            proteinMinG = profile?.proteinTargetMinG,
+            proteinMaxG = profile?.proteinTargetMaxG,
+            wakeTargetHour = profile?.wakeTarget?.hour
+        ).getOrThrow()
         logOutput(trigger, tier, output)
         persistClinicalFlags(output)
         output
     }
+
+    /**
+     * TwinGuardrails önceden kullanıcının Ayarlar'da belirlediği su/protein/kalkış
+     * hedeflerinden habersizdi — sabit varsayılanlarla çalışıyordu (bkz. Hafta 21
+     * commit notu). Profil yüklenemezse (örn. oturum yok) null döner ve
+     * TwinEngine/TwinGuardrails kendi varsayılanlarına düşer.
+     */
+    private suspend fun currentProfile() =
+        currentUserId()?.let { profileRepository.observe(it).first() }
 
     /**
      * Haftalık seyir analizi — son 14 gecenin eğilimini Opus tier ile
@@ -55,7 +72,15 @@ class TwinRepository(
                 "bugünkü loglarla karşılaştırarak değerlendir.",
             snapshotLimit = 14
         )
-        val output = engine.generate(state, tierOverride = "weekly").getOrThrow()
+        val profile = currentProfile()
+        val output = engine.generate(
+            state,
+            tierOverride = "weekly",
+            waterTargetMl = profile?.waterTargetMl,
+            proteinMinG = profile?.proteinTargetMinG,
+            proteinMaxG = profile?.proteinTargetMaxG,
+            wakeTargetHour = profile?.wakeTarget?.hour
+        ).getOrThrow()
         logOutput(Trigger.MANUAL, "weekly", output)
         persistClinicalFlags(output)
         output

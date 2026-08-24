@@ -6,6 +6,7 @@ import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.SnapshotSource
 import com.aydin.biyohack.data.local.BodyMetricDao
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
@@ -82,6 +83,27 @@ class HealthSyncRepository(
             snapshot
         }
 
+    /**
+     * Health Connect'te bu gece için kayıt yoksa (cihaz takılmadı, izin
+     * verilmedi, senkronizasyon henüz çalışmadı vb.) kullanıcının elle
+     * girdiği uyku süresini `source = MANUAL` ile kaydeder. Önceden bu durumda
+     * "Bu gece" kartı süresiz "Veri yok" kalıyordu ve TwinGuardrails her
+     * defasında "VERİ YOK" fact'i üretiyordu — schema.sql'deki `MANUAL` kaynak
+     * değeri hiçbir kod yolundan hiç yazılmıyordu.
+     */
+    suspend fun logManualSnapshot(date: LocalDate, asleepMin: Int): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val snapshot = DailySnapshot(
+            userId = userId,
+            date = date,
+            asleepMin = asleepMin,
+            source = SnapshotSource.MANUAL
+        )
+        dailySnapshotDao.upsert(snapshot.toEntity(SyncState.PENDING))
+        pushPendingSnapshots()
+        Unit
+    }
+
     /** Kullanıcının manuel logu — su/kahve/öğün/takviye. Anında yerelde görünür. */
     suspend fun logIntake(kind: IntakeKind, label: String, amount: Double?, unit: String?): Result<Unit> =
         runCatching {
@@ -126,6 +148,19 @@ class HealthSyncRepository(
         )
         labResultDao.upsert(result.toEntity(SyncState.PENDING))
         pushPendingLabResults()
+        Unit
+    }
+
+    /**
+     * Yanlış girilmiş bir laboratuvar sonucunu siler. Önceden düzeltme yolu
+     * yoktu — LabScreen'e eklenen her sonuç kalıcıydı, yanlış marker/değer/
+     * tarih girilse bile silinemiyordu. Önce Supabase'den siliniyor, ardından
+     * yerelden: aksi sırada, ağ hatası durumunda satır yerelde kaybolur ama
+     * `pullLabResultsFromRemote()` bir sonraki senkronda onu geri getirirdi.
+     */
+    suspend fun deleteLabResult(id: String): Result<Unit> = runCatching {
+        postgrest.from("lab_result").delete { filter { eq("id", id) } }
+        labResultDao.delete(id)
         Unit
     }
 

@@ -40,10 +40,21 @@ class TwinEngine(
      * protokolü = deep, diğerleri = fast). Haftalık seyir analizi gibi
      * trigger'dan bağımsız senaryolar için "weekly" (Opus) buradan geçilir
      * — bkz. supabase/functions/twin/index.ts MODELS.weekly.
+     * @param waterTargetMl/proteinMinG/proteinMaxG/wakeTargetHour — verilmezse
+     * TwinGuardrails kendi varsayılanlarını kullanır. Kullanıcının Ayarlar'da
+     * belirlediği gerçek hedefleri kural motoruna taşımak için (bkz. Hafta 21
+     * commit notu) TwinRepository buradan geçirir.
      */
-    suspend fun generate(state: TwinState, tierOverride: String? = null): Result<TwinOutput> = withContext(Dispatchers.IO) {
+    suspend fun generate(
+        state: TwinState,
+        tierOverride: String? = null,
+        waterTargetMl: Int? = null,
+        proteinMinG: Int? = null,
+        proteinMaxG: Int? = null,
+        wakeTargetHour: Int? = null
+    ): Result<TwinOutput> = withContext(Dispatchers.IO) {
         runCatching {
-            val facts = TwinGuardrails.buildFacts(state)
+            val facts = TwinGuardrails.buildFacts(state, waterTargetMl, proteinMinG, proteinMaxG, wakeTargetHour)
             val stateBlock = TwinStateSerializer.toPromptBlock(state, facts)
 
             val payload = JSONObject().apply {

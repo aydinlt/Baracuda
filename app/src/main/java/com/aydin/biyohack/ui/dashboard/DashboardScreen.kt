@@ -11,18 +11,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -134,6 +141,22 @@ class DashboardViewModel @Inject constructor(
             repository.logIntake(IntakeKind.WATER, "Su", ml, "ml")
         }
     }
+
+    /**
+     * Health Connect'te bu gece için kayıt yoksa (cihaz takılmadı, izin yok,
+     * senkronizasyon henüz çalışmadı) kullanıcı uyku süresini elle girebilir
+     * — önceden "Bu gece" kartı bu durumda süresiz "Veri yok" kalıyordu.
+     */
+    fun logManualSleep(hours: Int, minutes: Int) {
+        viewModelScope.launch {
+            _ui.update { it.copy(error = null) }
+            val result = repository.logManualSnapshot(
+                date = java.time.LocalDate.now(),
+                asleepMin = hours * 60 + minutes
+            )
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
+    }
 }
 
 @Composable
@@ -146,6 +169,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    var showManualSleepDialog by remember { mutableStateOf(false) }
 
     val permissionContract = remember { viewModel.healthConnectManager.requestPermissionsContract() }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -196,6 +220,9 @@ fun DashboardScreen(
                         val snap = ui.today
                         if (snap == null) {
                             Text("Veri yok — senkronize et veya bu gece için Health Connect kaydı yok.")
+                            TextButton(onClick = { showManualSleepDialog = true }) {
+                                Text("Uyku süresini elle gir")
+                            }
                         } else {
                             Text("Uyku: ${snap.asleepMin?.let { "${it / 60}s ${it % 60}d" } ?: "—"}")
                             Text("Verim: ${snap.efficiencyPct?.let { "%$it" } ?: "—"}")
@@ -316,4 +343,57 @@ fun DashboardScreen(
             }
         }
     }
+
+    if (showManualSleepDialog) {
+        ManualSleepDialog(
+            onDismiss = { showManualSleepDialog = false },
+            onConfirm = { hours, minutes ->
+                viewModel.logManualSleep(hours, minutes)
+                showManualSleepDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ManualSleepDialog(onDismiss: () -> Unit, onConfirm: (hours: Int, minutes: Int) -> Unit) {
+    var hours by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Uyku süresini elle gir") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Health Connect'te bu gece için kayıt yok — cihaz takılmadıysa ya da " +
+                        "senkronize henüz çalışmadıysa yaklaşık süreyi buradan girebilirsin.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = hours,
+                    onValueChange = { hours = it },
+                    label = { Text("Saat") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = minutes,
+                    onValueChange = { minutes = it },
+                    label = { Text("Dakika") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val h = hours.toIntOrNull() ?: return@Button
+                    val m = minutes.toIntOrNull() ?: return@Button
+                    onConfirm(h, m)
+                },
+                enabled = hours.toIntOrNull() != null && minutes.toIntOrNull() != null
+            ) { Text("Kaydet") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }
+    )
 }
