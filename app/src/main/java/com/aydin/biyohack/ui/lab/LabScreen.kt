@@ -179,8 +179,8 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
     if (showResultDialog) {
         AddResultDialog(
             onDismiss = { showResultDialog = false },
-            onConfirm = { panel, marker, value, unit, refLow, refHigh ->
-                viewModel.addResult(panel, marker, value, unit, refLow, refHigh, LocalDate.now())
+            onConfirm = { panel, marker, value, unit, refLow, refHigh, takenAt ->
+                viewModel.addResult(panel, marker, value, unit, refLow, refHigh, takenAt)
                 showResultDialog = false
             }
         )
@@ -200,7 +200,10 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
 @Composable
 private fun AddResultDialog(
     onDismiss: () -> Unit,
-    onConfirm: (panel: String, marker: String, value: Double, unit: String?, refLow: Double?, refHigh: Double?) -> Unit
+    onConfirm: (
+        panel: String, marker: String, value: Double, unit: String?,
+        refLow: Double?, refHigh: Double?, takenAt: LocalDate
+    ) -> Unit
 ) {
     var panel by remember { mutableStateOf("") }
     var marker by remember { mutableStateOf("") }
@@ -208,6 +211,10 @@ private fun AddResultDialog(
     var unit by remember { mutableStateOf("") }
     var refLow by remember { mutableStateOf("") }
     var refHigh by remember { mutableStateOf("") }
+    // Varsayılan bugün — ama lab raporları genelde kan alımından günler sonra elde
+    // ediyor, önceden bu alan hiç sorulmuyordu ve her sonuç sessizce "bugün" tarihiyle
+    // kaydediliyordu (bkz. Hafta 18 commit notu).
+    var takenAt by remember { mutableStateOf(LocalDate.now().toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -220,19 +227,28 @@ private fun AddResultDialog(
                 OutlinedTextField(value = unit, onValueChange = { unit = it }, label = { Text("Birim (opsiyonel)") })
                 OutlinedTextField(value = refLow, onValueChange = { refLow = it }, label = { Text("Ref alt (opsiyonel)") })
                 OutlinedTextField(value = refHigh, onValueChange = { refHigh = it }, label = { Text("Ref üst (opsiyonel)") })
+                OutlinedTextField(
+                    value = takenAt,
+                    onValueChange = { takenAt = it },
+                    label = { Text("Tahlil tarihi (YYYY-AA-GG)") }
+                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     val v = value.toDoubleOrNull() ?: return@Button
+                    val date = runCatching { LocalDate.parse(takenAt) }.getOrNull() ?: return@Button
                     onConfirm(
                         panel.trim(), marker.trim(), v,
                         unit.trim().ifBlank { null },
-                        refLow.toDoubleOrNull(), refHigh.toDoubleOrNull()
+                        refLow.toDoubleOrNull(), refHigh.toDoubleOrNull(),
+                        date
                     )
                 },
-                enabled = panel.isNotBlank() && marker.isNotBlank() && value.toDoubleOrNull() != null
+                enabled = panel.isNotBlank() && marker.isNotBlank() &&
+                    value.toDoubleOrNull() != null &&
+                    runCatching { LocalDate.parse(takenAt) }.isSuccess
             ) { Text("Ekle") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }

@@ -31,7 +31,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.IntakeKind
+import com.aydin.biyohack.data.repository.AuthRepository
 import com.aydin.biyohack.data.repository.HealthSyncRepository
+import com.aydin.biyohack.data.repository.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,15 +42,37 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class LogUiState(val lastLogged: String? = null, val error: String? = null)
+data class LogUiState(
+    val lastLogged: String? = null,
+    val error: String? = null,
+    val proteinTargetMinG: Int = 140,
+    val proteinTargetMaxG: Int = 170
+)
 
 @HiltViewModel
 class LogViewModel @Inject constructor(
-    private val repository: HealthSyncRepository
+    private val repository: HealthSyncRepository,
+    private val profileRepository: ProfileRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(LogUiState())
     val ui: StateFlow<LogUiState> = _ui.asStateFlow()
+
+    init {
+        // Önceden bu ekran "Protein hedefi 140–170 g sabittir" diye SABİT bir metin
+        // gösteriyordu — SettingsScreen bu hedefi Hafta 7'den beri düzenlenebilir
+        // yapmıştı, LogScreen hiç güncellenmemişti. Gerçek profil değerine bağlandı.
+        authRepository.currentUserId()?.let { userId ->
+            viewModelScope.launch {
+                profileRepository.observe(userId).collect { profile ->
+                    profile?.let { p ->
+                        _ui.update { it.copy(proteinTargetMinG = p.proteinTargetMinG, proteinTargetMaxG = p.proteinTargetMaxG) }
+                    }
+                }
+            }
+        }
+    }
 
     fun log(kind: IntakeKind, label: String, amount: Double? = null, unit: String? = null) {
         viewModelScope.launch {
@@ -123,7 +147,7 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Öğün", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Protein hedefi 140–170 g sabittir (bkz. Ayarlar) — girmek istersen protein sor.",
+                    "Protein hedefi ${ui.proteinTargetMinG}–${ui.proteinTargetMaxG} g (bkz. Ayarlar) — girmek istersen protein sor.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
