@@ -1,10 +1,18 @@
 package com.aydin.biyohack.twin
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 data class TwinAction(
     val time: String,
@@ -34,6 +42,20 @@ class TwinEngine(
     private val proxyUrl: String,          // https://<proj>.supabase.co/functions/v1/twin
     private val supabaseAnonKey: String
 ) {
+    /**
+     * Uygulama boyunca tek bir istemci paylaşılır — bağlantı havuzlaması/keep-alive
+     * sağlar. Önceden her generate() çağrısı kendi HttpURLConnection'ını sıfırdan
+     * açıp kapatıyordu (bkz. Hafta 35 commit notu); "fast" tier günde 5-15 kez
+     * çağrıldığı için (system_twin.md Bölüm 4) bu gereksiz bir maliyetti. Motor
+     * OkHttp — supabase-kt'nin Postgrest/Auth çağrıları için zaten kullandığı aynı
+     * engine (bkz. build.gradle.kts ktor-client-okhttp), ayrı bir HTTP yığını değil.
+     */
+    private val httpClient = HttpClient(OkHttp) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 15_000
+            requestTimeoutMillis = 60_000
+        }
+    }
 
     /**
      * @param tierOverride verilmezse tier tetikleyiciden çıkarılır (sabah
@@ -64,23 +86,16 @@ class TwinEngine(
                 put("tier", tierOverride ?: if (state.trigger == Trigger.MORNING_PROTOCOL) "deep" else "fast")
             }
 
-            val conn = (URL(proxyUrl).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                doOutput = true
-                connectTimeout = 15_000
-                readTimeout = 60_000
-                setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Authorization", "Bearer $supabaseAnonKey")
+            val response = httpClient.post(proxyUrl) {
+                header("Authorization", "Bearer $supabaseAnonKey")
+                contentType(ContentType.Application.Json)
+                setBody(payload.toString())
             }
-            conn.outputStream.use { it.write(payload.toString().toByteArray()) }
+            val body = response.bodyAsText()
 
-            val body = if (conn.responseCode in 200..299)
-                conn.inputStream.bufferedReader().readText()
-            else
-                throw IllegalStateException(
-                    "Proxy ${conn.responseCode}: " +
-                        conn.errorStream?.bufferedReader()?.readText()
-                )
+            if (!response.status.isSuccess()) {
+                throw IllegalStateException("Proxy ${response.status.value}: $body")
+            }
 
             parse(body)
         }

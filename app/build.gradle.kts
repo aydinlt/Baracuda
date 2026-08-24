@@ -110,6 +110,14 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:3.0.3"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
+
+    // ---- Ktor HTTP istemcisi (TwinEngine → Supabase Edge Function → harici AI API) ----
+    // supabase-kt zaten dahili olarak ktor-client-okhttp'yi kullanıyordu ama
+    // TwinEngine.generate() önceden bunun yerine ham java.net.HttpURLConnection
+    // kullanıyordu — her çağrıda bağlantıyı sıfırdan açıp kapatıyordu, bağlantı
+    // havuzlaması/keep-alive yoktu. Artık aynı OkHttp motorunu paylaşan tek bir
+    // HttpClient kullanılıyor (bkz. twin/TwinEngine.kt Hafta 35 commit notu).
+    implementation("io.ktor:ktor-client-core:3.0.1")
     implementation("io.ktor:ktor-client-okhttp:3.0.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
