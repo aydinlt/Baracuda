@@ -142,6 +142,11 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    /** Yanlış dokunulmuş bir log satırını siler — bkz. HealthSyncRepository.deleteIntake. */
+    fun deleteIntake(id: String) {
+        viewModelScope.launch { repository.deleteIntake(id) }
+    }
+
     /**
      * Health Connect'te bu gece için kayıt yoksa (cihaz takılmadı, izin yok,
      * senkronizasyon henüz çalışmadı) kullanıcı uyku süresini elle girebilir
@@ -319,11 +324,15 @@ fun DashboardScreen(
             } else {
                 items(ui.todayIntake.sortedByDescending { it.ts }) { entry ->
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
                                 "${entry.kind.name} — ${entry.label}" +
                                     (entry.amount?.let { " (${it.toInt()}${entry.unit ?: ""})" } ?: "")
                             )
+                            TextButton(onClick = { viewModel.deleteIntake(entry.id) }) { Text("Sil") }
                         }
                     }
                 }

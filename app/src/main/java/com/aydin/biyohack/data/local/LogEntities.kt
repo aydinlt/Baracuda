@@ -57,6 +57,9 @@ interface IntakeRecordDao {
     /** Kreatinsiz gün sayacı için — TwinStateBuilder bunu kullanır (bkz. system_twin.md Bölüm E). */
     @Query("SELECT * FROM intake_entry WHERE label LIKE '%kreatin%' COLLATE NOCASE ORDER BY ts DESC LIMIT 1")
     suspend fun getLastCreatineLog(): IntakeRecordEntity?
+
+    @Query("DELETE FROM intake_entry WHERE id = :id")
+    suspend fun delete(id: String)
 }
 
 // ════════════════════════════════════════════════════════════

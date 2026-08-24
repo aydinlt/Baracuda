@@ -122,6 +122,20 @@ class HealthSyncRepository(
             Unit
         }
 
+    /**
+     * Yanlış dokunulmuş bir logu (ör. "Su içtim +500ml" yanlışlıkla ikinci kez
+     * basıldı) siler — önceden hiç geri alma/silme yolu yoktu, tek dokunuşluk
+     * hızlı log butonlarında (LogScreen/DashboardScreen) bu riski yüksek
+     * kılıyordu: fazladan bir su/protein logu hem Dashboard'daki ilerleme
+     * çubuğunu hem TwinGuardrails'in ürettiği uyarıları yanlış hesaplatırdı.
+     * deleteLabResult ile aynı sıra: önce Supabase, sonra yerel.
+     */
+    suspend fun deleteIntake(id: String): Result<Unit> = runCatching {
+        postgrest.from("intake_entry").delete { filter { eq("id", id) } }
+        intakeRecordDao.delete(id)
+        Unit
+    }
+
     /** Elle laboratuvar sonucu ekler (ör. web panelini beklemeden cihazdan). */
     suspend fun addLabResult(
         panel: String,
