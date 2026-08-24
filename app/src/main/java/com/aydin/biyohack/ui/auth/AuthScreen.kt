@@ -40,7 +40,8 @@ data class AuthUiState(
     val mode: AuthMode = AuthMode.SIGN_IN,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val resetEmailSent: Boolean = false
+    val resetEmailSent: Boolean = false,
+    val signUpSucceeded: Boolean = false
 )
 
 @HiltViewModel
@@ -51,11 +52,15 @@ class AuthViewModel @Inject constructor(
     private val _ui = MutableStateFlow(AuthUiState())
     val ui: StateFlow<AuthUiState> = _ui.asStateFlow()
 
-    fun onEmailChange(value: String) = _ui.update { it.copy(email = value, error = null) }
-    fun onPasswordChange(value: String) = _ui.update { it.copy(password = value, error = null) }
+    fun onEmailChange(value: String) = _ui.update { it.copy(email = value, error = null, signUpSucceeded = false) }
+    fun onPasswordChange(value: String) = _ui.update { it.copy(password = value, error = null, signUpSucceeded = false) }
 
     fun toggleMode() = _ui.update {
-        it.copy(mode = if (it.mode == AuthMode.SIGN_IN) AuthMode.SIGN_UP else AuthMode.SIGN_IN, error = null)
+        it.copy(
+            mode = if (it.mode == AuthMode.SIGN_IN) AuthMode.SIGN_UP else AuthMode.SIGN_IN,
+            error = null,
+            signUpSucceeded = false
+        )
     }
 
     /** "Şifremi unuttum" bağlantısı — yalnızca SIGN_IN modundan erişilebilir. */
@@ -79,7 +84,17 @@ class AuthViewModel @Inject constructor(
                 authRepository.signIn(state.email, state.password)
             else
                 authRepository.signUp(state.email, state.password)
-            _ui.update { it.copy(isLoading = false, error = result.exceptionOrNull()?.message) }
+            _ui.update {
+                it.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.message,
+                    // Supabase projesinde e-posta onayı açıksa signUp başarılı döner ama
+                    // oturum hemen açılmaz (isSignedIn false kalır, MainActivity bu ekranı
+                    // kapatmaz) — önceden kullanıcı hiçbir açıklama olmadan boşlukta
+                    // kalıyordu, ne olduğunu anlamıyordu.
+                    signUpSucceeded = state.mode == AuthMode.SIGN_UP && result.isSuccess
+                )
+            }
         }
     }
 
@@ -177,6 +192,13 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
             )
 
             ui.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (ui.signUpSucceeded) {
+                Text(
+                    "Kayıt başarılı. Hesabın e-posta onayı gerektiriyorsa gelen kutunu " +
+                        "kontrol edip bağlantıya tıkla, ardından giriş yap.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
 
             Button(
                 onClick = viewModel::submit,
