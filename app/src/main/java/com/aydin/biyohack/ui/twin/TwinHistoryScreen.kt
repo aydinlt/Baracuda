@@ -22,6 +22,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.aydin.biyohack.data.repository.AuthRepository
+import com.aydin.biyohack.data.repository.ProfileRepository
 import com.aydin.biyohack.data.repository.TwinOutputHistoryEntry
 import com.aydin.biyohack.data.repository.TwinRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,23 +32,42 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class TwinHistoryUiState(
     val entries: List<TwinOutputHistoryEntry> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val morningProtocolTime: String = "07:30"
 )
 
 @HiltViewModel
 class TwinHistoryViewModel @Inject constructor(
-    private val twinRepository: TwinRepository
+    private val twinRepository: TwinRepository,
+    private val profileRepository: ProfileRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(TwinHistoryUiState())
     val ui: StateFlow<TwinHistoryUiState> = _ui.asStateFlow()
 
-    init { refresh() }
+    init {
+        refresh()
+        // Boş durum metni önceden sabit "07:30" yazıyordu — TwinMorningWorker artık
+        // kullanıcının Ayarlar'da belirlediği kalkış hedefi + 30dk'ya göre çalışıyor
+        // (bkz. Hafta 17), bu ekran hâlâ eski sabit metni gösteriyordu.
+        authRepository.currentUserId()?.let { userId ->
+            viewModelScope.launch {
+                profileRepository.observe(userId).collect { profile ->
+                    profile?.let { p ->
+                        val formatter = DateTimeFormatter.ofPattern("HH:mm")
+                        _ui.update { it.copy(morningProtocolTime = p.wakeTarget.plusMinutes(30).format(formatter)) }
+                    }
+                }
+            }
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -86,7 +107,7 @@ fun TwinHistoryScreen(onBack: () -> Unit, viewModel: TwinHistoryViewModel = hilt
             ui.error?.let { Text("Hata: $it", color = MaterialTheme.colorScheme.error) }
 
             if (!ui.isLoading && ui.entries.isEmpty()) {
-                Text("Henüz kayıt yok — sabah protokolü her gün 07:30'da otomatik çalışır.")
+                Text("Henüz kayıt yok — sabah protokolü her gün ${ui.morningProtocolTime}'da otomatik çalışır.")
             }
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
