@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.aydin.biyohack.data.repository.HealthSyncRepository
 import com.aydin.biyohack.data.repository.TwinRepository
 import com.aydin.biyohack.notifications.TwinNotifier
 import com.aydin.biyohack.twin.Trigger
@@ -27,16 +28,24 @@ import java.util.concurrent.TimeUnit
  * (PeriodicWorkRequest yalnızca aralık garantisi verir, ilk çalışma anı
  * kesin değildir) — bu yüzden kendini bir sonraki güne yeniden zamanlayan
  * (self-rescheduling) OneTimeWorkRequest deseni kullanılır.
+ *
+ * ÖNEMLİ: `runProtocol()`'dan önce `syncAll()` çağrılır. HealthSyncWorker
+ * yalnızca 6 saatte bir çalışıyor (bkz. HealthSyncWorker.kt) — doze mode
+ * gecikmesi ya da basitçe zamanlama yüzünden 07:30'da Room'daki gece
+ * verisi hâlâ dünkü olabilir. Senkron etmeden protokolü çalıştırmak,
+ * TwinEngine'e eski/eksik veri vermek demektir.
  */
 @HiltWorker
 class TwinMorningWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
+    private val healthSyncRepository: HealthSyncRepository,
     private val twinRepository: TwinRepository,
     private val notifier: TwinNotifier
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        healthSyncRepository.syncAll()
         val outcome = twinRepository.runProtocol(Trigger.MORNING_PROTOCOL)
         outcome.getOrNull()?.let { notifier.notify(it) }
         scheduleNext(applicationContext)
