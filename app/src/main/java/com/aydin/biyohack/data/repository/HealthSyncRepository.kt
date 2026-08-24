@@ -260,14 +260,37 @@ class HealthSyncRepository(
             .forEach { labResultDao.upsert(it.toDomain().toEntity(SyncState.SYNCED)) }
     }
 
-    /** WorkManager tetikleyicisi ve "Şimdi Senkronize Et" butonunun ortak giriş noktası. */
-    suspend fun syncAll(): Result<Unit> = runCatching {
-        syncLastNightFromDevice().getOrThrow()
-        pushPendingSnapshots().getOrThrow()
-        pushPendingIntake().getOrThrow()
-        pushPendingLabResults().getOrThrow()
-        pushPendingClinicalFlags().getOrThrow()
-        pushPendingBodyMetrics().getOrThrow()
-        pullLabResultsFromRemote().getOrThrow()
+    /**
+     * WorkManager tetikleyicisi ve "Şimdi Senkronize Et" butonunun ortak giriş noktası.
+     *
+     * ÖNEMLİ: Adımlar önceden tek bir `runCatching` içinde `.getOrThrow()` ile
+     * zincirlenmişti — tek bir adımın (ör. ağ hatası yüzünden pushPendingIntake)
+     * başarısız olması, ondan sonraki TÜM bağımsız adımları (lab sonuçları, klinik
+     * bayraklar, vücut ölçümleri, uzak lab çekme) hiç denenmeden atlatıyordu. Bu,
+     * sınıfın en üstündeki "best-effort" tasarımına aykırıydı — her veri tipinin
+     * kendi PENDING kuyruğu var, biri diğerini bloklamamalı. Artık her adım
+     * bağımsız denenir; en az biri başarısız olursa hangilerinin başarısız
+     * olduğunu listeleyen tek bir hata döner, ama başarılı olanlar zaten
+     * senkronize edilmiş olur.
+     */
+    suspend fun syncAll(): Result<Unit> {
+        val failures = buildList {
+            runCatching { syncLastNightFromDevice().getOrThrow() }.exceptionOrNull()?.let { add("gece verisi" to it) }
+            runCatching { pushPendingSnapshots().getOrThrow() }.exceptionOrNull()?.let { add("gecelik özet" to it) }
+            runCatching { pushPendingIntake().getOrThrow() }.exceptionOrNull()?.let { add("loglar" to it) }
+            runCatching { pushPendingLabResults().getOrThrow() }.exceptionOrNull()?.let { add("lab sonuçları" to it) }
+            runCatching { pushPendingClinicalFlags().getOrThrow() }.exceptionOrNull()?.let { add("klinik bayraklar" to it) }
+            runCatching { pushPendingBodyMetrics().getOrThrow() }.exceptionOrNull()?.let { add("vücut ölçümleri" to it) }
+            runCatching { pullLabResultsFromRemote().getOrThrow() }.exceptionOrNull()?.let { add("uzak lab çekme" to it) }
+        }
+        return if (failures.isEmpty()) {
+            Result.success(Unit)
+        } else {
+            Result.failure(
+                IllegalStateException(
+                    "Senkron kısmen başarısız: " + failures.joinToString(", ") { (name, e) -> "$name (${e.message})" }
+                )
+            )
+        }
     }
 }
