@@ -112,6 +112,7 @@ fun DashboardScreen(
     onOpenTwin: () -> Unit = {},
     onOpenLab: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenLog: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -192,6 +193,9 @@ fun DashboardScreen(
             }
             item {
                 Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("Ayarlar") }
+            }
+            item {
+                Button(onClick = onOpenLog, modifier = Modifier.fillMaxWidth()) { Text("Hızlı Log (kahve / öğün / takviye)") }
             }
 
             ui.error?.let { error -> item { Text("Hata: $error") } }
