@@ -6,11 +6,13 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.SnapshotSource
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -29,6 +31,15 @@ import java.time.ZoneId
  */
 interface HealthDataSource {
     suspend fun readSnapshotForNight(date: LocalDate, userId: String): DailySnapshot?
+
+    /**
+     * Bugünün şu ana kadarki adım toplamı. system_twin.md Bölüm A "10.000 adım
+     * hedefi"nden söz eder ama önceden uygulamada adım verisini okuyan hiçbir
+     * kod yolu yoktu — Health Connect izinleri yalnızca uyku/SpO2 kapsıyordu.
+     * Kalıcı bir kayıt değil (DailySnapshot'ın aksine Room/Supabase'e yazılmaz) —
+     * gün içinde değişen anlık bir okuma, "Bugünkü loglar" gibi canlı gösterilir.
+     */
+    suspend fun readTodaySteps(): Long?
 }
 
 enum class HealthConnectAvailability { INSTALLED, NOT_INSTALLED, NOT_SUPPORTED }
@@ -129,10 +140,28 @@ class HealthConnectManager(private val context: Context) : HealthDataSource {
         )
     }
 
+    /** Bugün 00:00'dan şu ana kadarki StepsRecord'ları toplar. İzin yoksa/kayıt yoksa null. */
+    override suspend fun readTodaySteps(): Long? {
+        val c = client ?: return null
+        val zone = ZoneId.systemDefault()
+        val startOfDay = LocalDate.now().atStartOfDay(zone).toInstant()
+        val now = Instant.now()
+
+        val records = c.readRecords(
+            ReadRecordsRequest(
+                recordType = StepsRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startOfDay, now)
+            )
+        ).records
+
+        return records.sumOf { it.count }
+    }
+
     companion object {
         val PERMISSIONS = setOf(
             HealthPermission.getReadPermission(SleepSessionRecord::class),
-            HealthPermission.getReadPermission(OxygenSaturationRecord::class)
+            HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+            HealthPermission.getReadPermission(StepsRecord::class)
         )
     }
 }
