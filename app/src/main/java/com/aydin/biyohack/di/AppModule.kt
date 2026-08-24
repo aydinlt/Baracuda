@@ -114,11 +114,13 @@ object AppModule {
         stateBuilder: TwinStateBuilder,
         engine: TwinEngine,
         postgrest: Postgrest,
-        auth: Auth
+        auth: Auth,
+        healthSyncRepository: HealthSyncRepository
     ): TwinRepository = TwinRepository(
         stateBuilder = stateBuilder,
         engine = engine,
         postgrest = postgrest,
+        healthSyncRepository = healthSyncRepository,
         currentUserId = { auth.currentUserOrNull()?.id }
     )
 }
