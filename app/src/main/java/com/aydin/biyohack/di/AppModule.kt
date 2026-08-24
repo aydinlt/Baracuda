@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.aydin.biyohack.BuildConfig
 import com.aydin.biyohack.data.local.ALL_MIGRATIONS
 import com.aydin.biyohack.data.local.AppDatabase
+import com.aydin.biyohack.data.local.BodyMetricDao
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
 import com.aydin.biyohack.data.local.IntakeRecordDao
@@ -47,6 +48,7 @@ object AppModule {
     @Provides fun provideLabResultDao(db: AppDatabase): LabResultDao = db.labResultDao()
     @Provides fun provideClinicalFlagDao(db: AppDatabase): ClinicalFlagDao = db.clinicalFlagDao()
     @Provides fun provideProfileDao(db: AppDatabase): ProfileDao = db.profileDao()
+    @Provides fun provideBodyMetricDao(db: AppDatabase): BodyMetricDao = db.bodyMetricDao()
 
     @Provides
     @Singleton
@@ -70,6 +72,7 @@ object AppModule {
         intakeRecordDao: IntakeRecordDao,
         labResultDao: LabResultDao,
         clinicalFlagDao: ClinicalFlagDao,
+        bodyMetricDao: BodyMetricDao,
         postgrest: Postgrest,
         auth: Auth,
         healthDataSource: HealthDataSource
@@ -78,6 +81,7 @@ object AppModule {
         intakeRecordDao = intakeRecordDao,
         labResultDao = labResultDao,
         clinicalFlagDao = clinicalFlagDao,
+        bodyMetricDao = bodyMetricDao,
         postgrest = postgrest,
         healthDataSource = healthDataSource,
         currentUserId = { auth.currentUserOrNull()?.id }
