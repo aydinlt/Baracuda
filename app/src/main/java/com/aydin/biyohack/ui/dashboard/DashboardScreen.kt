@@ -69,6 +69,8 @@ data class DashboardUiState(
     val isSyncing: Boolean = false,
     val permissionsGranted: Boolean = false,
     val healthConnectAvailability: HealthConnectAvailability = HealthConnectAvailability.INSTALLED,
+    val todaySteps: Long? = null,
+    val stepsTarget: Int = 10_000,
     val error: String? = null
 )
 
@@ -104,9 +106,10 @@ class DashboardViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            val granted = healthConnectManager.hasAllPermissions()
             _ui.update {
                 it.copy(
-                    permissionsGranted = healthConnectManager.hasAllPermissions(),
+                    permissionsGranted = granted,
                     // Önceden cihazda Health Connect kurulu değilse (ör. eski bir telefon,
                     // provider güncellemesi gerekiyor) "İzin ver" butonu hiçbir işe yaramayan
                     // bir izin akışı başlatmaya çalışıyordu — kullanıcıya ne yapması
@@ -114,6 +117,7 @@ class DashboardViewModel @Inject constructor(
                     healthConnectAvailability = healthConnectManager.availability()
                 )
             }
+            if (granted) refreshTodaySteps()
         }
         // İlk girişte Supabase'de profil satırı yoksa varsayılanlarla oluşturur.
         viewModelScope.launch {
@@ -137,7 +141,10 @@ class DashboardViewModel @Inject constructor(
     fun onPermissionsResult(granted: Set<String>) {
         val allGranted = granted.containsAll(HealthConnectManager.PERMISSIONS)
         _ui.update { it.copy(permissionsGranted = allGranted) }
-        if (allGranted) syncNow()
+        if (allGranted) {
+            syncNow()
+            viewModelScope.launch { refreshTodaySteps() }
+        }
     }
 
     fun syncNow() {
@@ -150,7 +157,21 @@ class DashboardViewModel @Inject constructor(
                     error = result.exceptionOrNull()?.message
                 )
             }
+            refreshTodaySteps()
         }
+    }
+
+    /**
+     * system_twin.md Bölüm A "10.000 adım hedefi"nden söz eder ama önceden
+     * uygulamada adım verisini okuyan hiçbir kod yolu yoktu. Kalıcı bir kayıt
+     * değil — DailySnapshot'ın aksine Room/Supabase'e yazılmaz, her senkronda
+     * (ve ilk açılışta) Health Connect'ten canlı okunur. İzin yoksa ya da
+     * okuma başarısız olursa sessizce null kalır — "Bu gece" kartındaki gibi
+     * bloklayıcı bir hata değil.
+     */
+    private suspend fun refreshTodaySteps() {
+        val steps = runCatching { healthConnectManager.readTodaySteps() }.getOrNull()
+        _ui.update { it.copy(todaySteps = steps) }
     }
 
     fun logWater(ml: Double) {
@@ -313,6 +334,27 @@ fun DashboardScreen(
                                 ).joinToString(" · ")
                             )
                             Text(metric.date.toString(), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
+            // system_twin.md Bölüm A "10.000 adım hedefi"nden söz eder ama önceden bu
+            // hedef hiçbir yerde gerçek veriyle karşılaştırılmıyordu — bkz. Hafta 39
+            // commit notu. Kalıcı bir kayıt değil, Health Connect'ten canlı okunur.
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Adım", style = MaterialTheme.typography.titleMedium)
+                        val steps = ui.todaySteps
+                        if (steps == null) {
+                            Text("Veri yok — senkronize et.")
+                        } else {
+                            Text("$steps / ${ui.stepsTarget}")
+                            LinearProgressIndicator(
+                                progress = { (steps.toFloat() / ui.stepsTarget).coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
