@@ -28,7 +28,27 @@ object TwinGuardrails {
     // 1) FACT üretimi
     // ───────────────────────────────────────────────────────
 
-    fun buildFacts(s: TwinState): List<String> {
+    /**
+     * [waterTargetMl]/[proteinMinG]/[proteinMaxG]/[wakeTargetHour] — null bırakılırsa
+     * yukarıdaki sabitler kullanılır (geriye dönük uyumlu varsayılan). Bu dört değer
+     * artık SettingsScreen'den düzenlenebiliyor (bkz. Profile.waterTargetMl vb., Hafta
+     * 7/17) — kural motoru önceden bunlardan habersiz sabit değerlerle çalışıyordu,
+     * yani kullanıcı hedefini değiştirse bile İkiz eski varsayılana göre uyarı üretiyordu.
+     * `EARLIEST_BED` kasıtlı olarak parametreleştirilmedi: Profile.bedEarliest hâlâ hiçbir
+     * yerde düzenlenebilir değil (bkz. Hafta 17 commit notu), o yüzden burada da sabit kaldı.
+     */
+    fun buildFacts(
+        s: TwinState,
+        waterTargetMl: Int? = null,
+        proteinMinG: Int? = null,
+        proteinMaxG: Int? = null,
+        wakeTargetHour: Int? = null
+    ): List<String> {
+        val waterTarget = waterTargetMl ?: WATER_TARGET_ML
+        val protMin = proteinMinG ?: PROTEIN_MIN_G
+        val protMax = proteinMaxG ?: PROTEIN_MAX_G
+        val wakeTarget = wakeTargetHour ?: WAKE_TARGET
+
         val facts = mutableListOf<String>()
         val nowTime = s.now.atZone(zone).toLocalTime()
         val bedTarget = LocalTime.of(EARLIEST_BED, 0)
@@ -78,18 +98,18 @@ object TwinGuardrails {
         // --- Su ---
         val water = s.todayIntake.filter { it.type == IntakeType.WATER }
             .sumOf { it.amount ?: 0.0 }.toInt()
-        val hoursAwake = maxOf(1, nowTime.hour - WAKE_TARGET)
-        val expected = (WATER_TARGET_ML * hoursAwake / 15).coerceAtMost(WATER_TARGET_ML)
+        val hoursAwake = maxOf(1, nowTime.hour - wakeTarget)
+        val expected = (waterTarget * hoursAwake / 15).coerceAtMost(waterTarget)
         when {
             water == 0 && nowTime.hour > 10 ->
                 facts += "Su logu boş ve saat $nowTime — veri eksik, öneri üretmeden önce " +
                     "data_gaps'e yaz."
             water < expected * 0.7 ->
                 facts += "Su geride: $water ml, bu saatte beklenen ~$expected ml " +
-                    "(hedef $WATER_TARGET_ML ml). İdrar dansitesi 1,025 seyrettiği için " +
+                    "(hedef $waterTarget ml). İdrar dansitesi 1,025 seyrettiği için " +
                     "bu açık önemli."
             else ->
-                facts += "Su durumu uygun: $water / $WATER_TARGET_ML ml."
+                facts += "Su durumu uygun: $water / $waterTarget ml."
         }
         if (s.saunaPlannedToday)
             facts += "Sauna planlı — elektrolit zorunlu, su hedefi üstüne çıkılmalı."
@@ -124,15 +144,15 @@ object TwinGuardrails {
         }
         s.lastNight?.wakeTime?.let {
             val w = it.atZone(zone).toLocalTime()
-            if (w.hour !in (WAKE_TARGET - 1)..(WAKE_TARGET + 1))
-                facts += "Kalkış $w — sabit 07:00 hedefinden sapma. Sirkadiyen " +
+            if (w.hour !in (wakeTarget - 1)..(wakeTarget + 1))
+                facts += "Kalkış $w — %02d:00 hedefinden sapma. Sirkadiyen ".format(wakeTarget) +
                     "sabitlenme için en kritik değişken budur."
         }
 
         // --- Öğün / protein ---
         if (meals.isEmpty() && nowTime.hour >= 18)
-            facts += "Bugün öğün logu yok. Protein hedefi $PROTEIN_MIN_G–$PROTEIN_MAX_G g " +
-                "sabittir; GLP-1 doz düşüşünde kas koruması için tampon işlevi görür."
+            facts += "Bugün öğün logu yok. Protein hedefi $protMin–$protMax g " +
+                "(bkz. Ayarlar); GLP-1 doz düşüşünde kas koruması için tampon işlevi görür."
         meals.maxByOrNull { it.ts }?.let { last ->
             val t = last.ts.atZone(zone).toLocalTime()
             if (t.isAfter(bedTarget.minusHours(2)))
