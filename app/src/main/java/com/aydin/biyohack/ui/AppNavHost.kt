@@ -8,10 +8,12 @@ import com.aydin.biyohack.ui.dashboard.DashboardScreen
 import com.aydin.biyohack.ui.lab.LabScreen
 import com.aydin.biyohack.ui.log.LogScreen
 import com.aydin.biyohack.ui.settings.SettingsScreen
+import com.aydin.biyohack.ui.twin.TwinHistoryScreen
 import com.aydin.biyohack.ui.twin.TwinScreen
 
 private const val ROUTE_DASHBOARD = "dashboard"
 private const val ROUTE_TWIN = "twin"
+private const val ROUTE_TWIN_HISTORY = "twin_history"
 private const val ROUTE_LAB = "lab"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_LOG = "log"
@@ -30,7 +32,13 @@ fun AppNavHost() {
             )
         }
         composable(ROUTE_TWIN) {
-            TwinScreen(onBack = { navController.popBackStack() })
+            TwinScreen(
+                onBack = { navController.popBackStack() },
+                onOpenHistory = { navController.navigate(ROUTE_TWIN_HISTORY) }
+            )
+        }
+        composable(ROUTE_TWIN_HISTORY) {
+            TwinHistoryScreen(onBack = { navController.popBackStack() })
         }
         composable(ROUTE_LAB) {
             LabScreen(onBack = { navController.popBackStack() })
