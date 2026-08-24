@@ -170,6 +170,12 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
             grouped.forEach { (panel, results) ->
                 item { Text(panel, style = MaterialTheme.typography.titleSmall) }
                 items(results.sortedByDescending { it.takenAt }) { r ->
+                    // Ekranın adı "Laboratuvar Seyri" (seyir = trend) ama önceden hiçbir
+                    // sonuç bir öncekiyle karşılaştırılmıyordu, yalnızca tek tek değerler
+                    // listeleniyordu — trend görmek için kullanıcının kendi kendine geçmiş
+                    // kayıtları karşılaştırması gerekiyordu.
+                    val previous = results.filter { it.marker == r.marker && it.takenAt < r.takenAt }
+                        .maxByOrNull { it.takenAt }
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -190,6 +196,14 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
                                     Text(
                                         "ref ${r.refLow ?: "—"}–${r.refHigh ?: "—"}",
                                         style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                previous?.let { p ->
+                                    val delta = r.value - p.value
+                                    Text(
+                                        "${if (delta >= 0) "+" else ""}${"%.1f".format(delta)} " +
+                                            "(önceki ${p.takenAt}: ${p.value})",
+                                        style = MaterialTheme.typography.labelSmall
                                     )
                                 }
                             }
