@@ -34,5 +34,28 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * v2 → v3: `body_metric` tablosu eklendi (Hafta 11 — kilo/bel çevresi
+ * takibi). Kolon adları [BodyMetricEntity] ve supabase/schema.sql'deki
+ * `body_metric` tablosuyla birebir eşleşir.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `body_metric` (
+                `epochDay` INTEGER NOT NULL,
+                `userId` TEXT NOT NULL,
+                `weightKg` REAL,
+                `waistCm` REAL,
+                `notes` TEXT,
+                `syncState` TEXT NOT NULL,
+                PRIMARY KEY(`epochDay`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 /** di/AppModule.kt'de `Room.databaseBuilder(...).addMigrations(*ALL_MIGRATIONS)` ile kullanılır. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

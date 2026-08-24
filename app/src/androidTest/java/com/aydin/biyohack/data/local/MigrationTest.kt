@@ -57,6 +57,30 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate2To3_addsBodyMetricTableWithoutTouchingExistingData() {
+        // v2 şemasıyla veritabanını oluştur ve profiles'a bir satır yaz.
+        helper.createDatabase(TEST_DB, 2).apply {
+            execSQL(
+                """
+                INSERT INTO profiles
+                    (userId, fullName, birthYear, sex, heightCm, timezone, waterTargetMl,
+                     proteinTargetMinG, proteinTargetMaxG, wakeTarget, bedEarliest, syncState)
+                VALUES ('test-user', 'Test', NULL, 'male', 180.0, 'Europe/Vilnius', 4000,
+                        140, 170, '07:00', '23:00', 'SYNCED')
+                """.trimIndent()
+            )
+            close()
+        }
+
+        // Migration'ı çalıştır: yeni `body_metric` şemasını doğrular, eski veriyi korur.
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3).apply {
+            val cursor = query("SELECT userId FROM profiles WHERE userId = 'test-user'")
+            cursor.use { assert(it.moveToFirst()) { "v2'de yazılan profiles satırı migration sonrası kayboldu" } }
+            close()
+        }
+    }
+
     companion object {
         private const val TEST_DB = "migration-test"
     }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.aydin.biyohack.ui.body.BodyMetricScreen
 import com.aydin.biyohack.ui.dashboard.DashboardScreen
 import com.aydin.biyohack.ui.lab.LabScreen
 import com.aydin.biyohack.ui.log.LogScreen
@@ -17,6 +18,7 @@ private const val ROUTE_TWIN_HISTORY = "twin_history"
 private const val ROUTE_LAB = "lab"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_LOG = "log"
+private const val ROUTE_BODY_METRIC = "body_metric"
 
 /** Oturum açıkken gösterilen ekranlar arası geçiş. Auth ekranı MainActivity'de ayrı tutulur. */
 @Composable
@@ -28,7 +30,8 @@ fun AppNavHost() {
                 onOpenTwin = { navController.navigate(ROUTE_TWIN) },
                 onOpenLab = { navController.navigate(ROUTE_LAB) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
-                onOpenLog = { navController.navigate(ROUTE_LOG) }
+                onOpenLog = { navController.navigate(ROUTE_LOG) },
+                onOpenBodyMetric = { navController.navigate(ROUTE_BODY_METRIC) }
             )
         }
         composable(ROUTE_TWIN) {
@@ -48,6 +51,9 @@ fun AppNavHost() {
         }
         composable(ROUTE_LOG) {
             LogScreen(onBack = { navController.popBackStack() })
+        }
+        composable(ROUTE_BODY_METRIC) {
+            BodyMetricScreen(onBack = { navController.popBackStack() })
         }
     }
 }

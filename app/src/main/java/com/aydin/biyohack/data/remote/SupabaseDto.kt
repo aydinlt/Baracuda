@@ -1,5 +1,6 @@
 package com.aydin.biyohack.data.remote
 
+import com.aydin.biyohack.data.BodyMetric
 import com.aydin.biyohack.data.ClinicalFlagRecord
 import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
@@ -155,4 +156,21 @@ fun ProfileRow.toDomain() = Profile(
     heightCm = heightCm, timezone = timezone, waterTargetMl = waterTargetMl,
     proteinTargetMinG = proteinTargetMinG, proteinTargetMaxG = proteinTargetMaxG,
     wakeTarget = LocalTime.parse(wakeTarget), bedEarliest = LocalTime.parse(bedEarliest)
+)
+
+@Serializable
+data class BodyMetricRow(
+    @SerialName("user_id") val userId: String,
+    val date: String,
+    @SerialName("weight_kg") val weightKg: Double? = null,
+    @SerialName("waist_cm") val waistCm: Double? = null,
+    val notes: String? = null
+)
+
+fun BodyMetric.toRow() = BodyMetricRow(
+    userId = userId, date = date.toString(), weightKg = weightKg, waistCm = waistCm, notes = notes
+)
+
+fun BodyMetricRow.toDomain() = BodyMetric(
+    userId = userId, date = LocalDate.parse(date), weightKg = weightKg, waistCm = waistCm, notes = notes
 )

@@ -1,10 +1,12 @@
 package com.aydin.biyohack.data.repository
 
+import com.aydin.biyohack.data.BodyMetric
 import com.aydin.biyohack.data.ClinicalFlagRecord
 import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.local.BodyMetricDao
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
 import com.aydin.biyohack.data.local.IntakeRecordDao
@@ -33,6 +35,7 @@ class HealthSyncRepository(
     private val intakeRecordDao: IntakeRecordDao,
     private val labResultDao: LabResultDao,
     private val clinicalFlagDao: ClinicalFlagDao,
+    private val bodyMetricDao: BodyMetricDao,
     private val postgrest: Postgrest,
     private val healthDataSource: HealthDataSource,
     private val currentUserId: suspend () -> String?
@@ -54,6 +57,9 @@ class HealthSyncRepository(
 
     fun observeUnresolvedFlags(): Flow<List<ClinicalFlagRecord>> =
         clinicalFlagDao.observeUnresolved().map { list -> list.map { it.toDomain() } }
+
+    fun observeRecentBodyMetrics(limit: Int = 30): Flow<List<BodyMetric>> =
+        bodyMetricDao.observeRecent(limit).map { list -> list.map { it.toDomain() } }
 
     /**
      * Son kreatin logundan bu yana geçen gün sayısı — TwinGuardrails'in
@@ -145,6 +151,24 @@ class HealthSyncRepository(
         Unit
     }
 
+    /** Bugünkü kilo/bel çevresi ölçümünü kaydeder — aynı gün tekrar çağrılırsa üzerine yazar. */
+    suspend fun logBodyMetric(weightKg: Double?, waistCm: Double?, notes: String? = null): Result<Unit> =
+        runCatching {
+            val userId = currentUserId() ?: error("Oturum açık değil")
+            val metric = BodyMetric(userId = userId, date = LocalDate.now(), weightKg = weightKg, waistCm = waistCm, notes = notes)
+            bodyMetricDao.upsert(metric.toEntity(SyncState.PENDING))
+            pushPendingBodyMetrics()
+            Unit
+        }
+
+    suspend fun pushPendingBodyMetrics() = runCatching {
+        bodyMetricDao.getPending().forEach { entity ->
+            val row = entity.toDomain().toRow()
+            postgrest.from("body_metric").upsert(row, onConflict = "user_id,date")
+            bodyMetricDao.markSynced(entity.epochDay)
+        }
+    }
+
     suspend fun pushPendingSnapshots() = runCatching {
         dailySnapshotDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
@@ -194,6 +218,7 @@ class HealthSyncRepository(
         pushPendingIntake().getOrThrow()
         pushPendingLabResults().getOrThrow()
         pushPendingClinicalFlags().getOrThrow()
+        pushPendingBodyMetrics().getOrThrow()
         pullLabResultsFromRemote().getOrThrow()
     }
 }

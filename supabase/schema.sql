@@ -190,3 +190,27 @@ create policy "twin_output_log_owner_all" on public.twin_output_log
 
 create index if not exists idx_twin_output_log_user_created
     on public.twin_output_log (user_id, created_at desc);
+
+-- ────────────────────────────────────────────────────────────
+-- 7) body_metric — kilo/bel çevresi seyri (Hafta 11).
+--    system_twin.md Bölüm A "Kilo seyri: 118 → 84 kg" burada devam ediyor —
+--    22 aylık geçmiş statik metinde, güncel ölçüm burada.
+-- ────────────────────────────────────────────────────────────
+create table if not exists public.body_metric (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references auth.users(id) on delete cascade,
+    date        date not null,
+    weight_kg   numeric,
+    waist_cm    numeric,
+    notes       text,
+    created_at  timestamptz not null default now(),
+    unique (user_id, date)
+);
+
+alter table public.body_metric enable row level security;
+
+create policy "body_metric_owner_all" on public.body_metric
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists idx_body_metric_user_date
+    on public.body_metric (user_id, date desc);
