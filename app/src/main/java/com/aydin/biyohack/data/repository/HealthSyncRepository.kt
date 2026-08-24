@@ -151,6 +151,19 @@ class HealthSyncRepository(
         Unit
     }
 
+    /**
+     * Yanlış girilmiş bir laboratuvar sonucunu siler. Önceden düzeltme yolu
+     * yoktu — LabScreen'e eklenen her sonuç kalıcıydı, yanlış marker/değer/
+     * tarih girilse bile silinemiyordu. Önce Supabase'den siliniyor, ardından
+     * yerelden: aksi sırada, ağ hatası durumunda satır yerelde kaybolur ama
+     * `pullLabResultsFromRemote()` bir sonraki senkronda onu geri getirirdi.
+     */
+    suspend fun deleteLabResult(id: String): Result<Unit> = runCatching {
+        postgrest.from("lab_result").delete { filter { eq("id", id) } }
+        labResultDao.delete(id)
+        Unit
+    }
+
     /** Elle klinik bayrak ekler — TwinGuardrails'in ürettiklerine ek olarak kullanıcı da açabilir. */
     suspend fun addClinicalFlag(finding: String, status: String, action: String = "none"): Result<Unit> =
         runCatching {

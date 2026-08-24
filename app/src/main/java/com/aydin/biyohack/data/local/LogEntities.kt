@@ -108,6 +108,9 @@ interface LabResultDao {
 
     @Query("UPDATE lab_result SET syncState = 'SYNCED' WHERE id = :id")
     suspend fun markSynced(id: String)
+
+    @Query("DELETE FROM lab_result WHERE id = :id")
+    suspend fun delete(id: String)
 }
 
 // ════════════════════════════════════════════════════════════

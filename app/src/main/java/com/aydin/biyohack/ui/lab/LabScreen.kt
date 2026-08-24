@@ -80,6 +80,10 @@ class LabViewModel @Inject constructor(
     fun resolveFlag(id: String) {
         viewModelScope.launch { repository.resolveClinicalFlag(id) }
     }
+
+    fun deleteResult(id: String) {
+        viewModelScope.launch { repository.deleteLabResult(id) }
+    }
 }
 
 /** Referans aralığının dışında mı — aralık bilinmiyorsa (null) değerlendirme yapılmaz. */
@@ -169,6 +173,7 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
                                     )
                                 }
                             }
+                            TextButton(onClick = { viewModel.deleteResult(r.id) }) { Text("Sil") }
                         }
                     }
                 }
