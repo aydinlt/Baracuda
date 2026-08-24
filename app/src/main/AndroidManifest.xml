@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
 
+    <!-- Sabah protokolü bildirimi için (Android 13+ runtime izin ister) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Health Connect'in yüklü olup olmadığını sorgulayabilmek için (Android 11+) -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
