@@ -48,6 +48,8 @@ data class DashboardUiState(
     val recent: List<DailySnapshot> = emptyList(),
     val todayIntake: List<IntakeRecord> = emptyList(),
     val waterTargetMl: Int = 4000,
+    val proteinTargetMinG: Int = 140,
+    val proteinTargetMaxG: Int = 170,
     val isSyncing: Boolean = false,
     val permissionsGranted: Boolean = false,
     val error: String? = null
@@ -83,7 +85,15 @@ class DashboardViewModel @Inject constructor(
             authRepository.currentUserId()?.let { userId ->
                 profileRepository.ensureLoaded(userId)
                 profileRepository.observe(userId).collect { profile ->
-                    profile?.let { p -> _ui.update { it.copy(waterTargetMl = p.waterTargetMl) } }
+                    profile?.let { p ->
+                        _ui.update {
+                            it.copy(
+                                waterTargetMl = p.waterTargetMl,
+                                proteinTargetMinG = p.proteinTargetMinG,
+                                proteinTargetMaxG = p.proteinTargetMaxG
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -226,6 +236,22 @@ fun DashboardScreen(
                             Button(onClick = { viewModel.logWater(ml) }) { Text("+${ml.toInt()} ml") }
                         }
                     }
+                }
+            }
+
+            item {
+                // MEAL kayıtlarında amount, yalnızca unit="g protein" ile loglananlarda protein gramıdır
+                // (bkz. LogScreen "Protein gir" dialog'u) — protein girilmemiş öğün logları toplamaya girmez.
+                val proteinG = ui.todayIntake
+                    .filter { it.kind == IntakeKind.MEAL && it.unit == "g protein" }
+                    .sumOf { it.amount ?: 0.0 }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Protein", style = MaterialTheme.typography.titleMedium)
+                    Text("${proteinG.toInt()} g (hedef ${ui.proteinTargetMinG}–${ui.proteinTargetMaxG} g)")
+                    LinearProgressIndicator(
+                        progress = { (proteinG / ui.proteinTargetMinG).toFloat().coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
