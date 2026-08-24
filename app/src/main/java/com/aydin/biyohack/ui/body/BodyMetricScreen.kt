@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -118,7 +118,14 @@ fun BodyMetricScreen(onBack: () -> Unit, viewModel: BodyMetricViewModel = hiltVi
                 modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
             )
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(ui.recent) { metric ->
+                // "Seyir" (LabScreen'deki "Laboratuvar Seyri" ile aynı isimlendirme) ama
+                // önceden bu ekran da hiçbir ölçümü bir öncekiyle karşılaştırmıyordu —
+                // yalnızca tek tek, birbirinden kopuk değerler listeleniyordu (bkz. Hafta
+                // 34 commit notu, LabScreen'de aynı sınıftan eksik için yapılan düzeltme).
+                // observeRecentBodyMetrics() epochDay DESC sıralı döndüğü için bir sonraki
+                // index'teki kayıt otomatik olarak "bir önceki" (daha eski) ölçümdür.
+                itemsIndexed(ui.recent) { index, metric ->
+                    val previous = ui.recent.getOrNull(index + 1)
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
                             Text(metric.date.toString(), style = MaterialTheme.typography.bodySmall)
@@ -128,6 +135,22 @@ fun BodyMetricScreen(onBack: () -> Unit, viewModel: BodyMetricViewModel = hiltVi
                                     metric.waistCm?.let { "%.1f cm bel".format(it) }
                                 ).joinToString(" · ")
                             )
+                            previous?.let { p ->
+                                val weightDelta = if (metric.weightKg != null && p.weightKg != null)
+                                    metric.weightKg - p.weightKg else null
+                                val waistDelta = if (metric.waistCm != null && p.waistCm != null)
+                                    metric.waistCm - p.waistCm else null
+                                val deltaParts = listOfNotNull(
+                                    weightDelta?.let { "${if (it >= 0) "+" else ""}${"%.1f".format(it)} kg" },
+                                    waistDelta?.let { "${if (it >= 0) "+" else ""}${"%.1f".format(it)} cm" }
+                                )
+                                if (deltaParts.isNotEmpty()) {
+                                    Text(
+                                        "${deltaParts.joinToString(" · ")} (önceki: ${p.date})",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
                         }
                     }
                 }
