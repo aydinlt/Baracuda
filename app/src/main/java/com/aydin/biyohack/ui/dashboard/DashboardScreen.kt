@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.aydin.biyohack.data.BodyMetric
 import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
@@ -47,6 +48,7 @@ data class DashboardUiState(
     val today: DailySnapshot? = null,
     val recent: List<DailySnapshot> = emptyList(),
     val todayIntake: List<IntakeRecord> = emptyList(),
+    val latestBodyMetric: BodyMetric? = null,
     val waterTargetMl: Int = 4000,
     val proteinTargetMinG: Int = 140,
     val proteinTargetMaxG: Int = 170,
@@ -75,6 +77,15 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             repository.observeTodayIntake().collect { intake ->
                 _ui.update { it.copy(todayIntake = intake) }
+            }
+        }
+        // Önceden kilo/bel çevresi yalnızca ayrı BodyMetricScreen'de görünürdü —
+        // en son ölçümü görmek için oraya gitmek gerekiyordu. "Bu gece" kartıyla
+        // aynı yerde, ana ekranda gösterilmesi kullanıcının her seferinde
+        // gezinmesini gereksiz kılıyor.
+        viewModelScope.launch {
+            repository.observeRecentBodyMetrics(limit = 1).collect { list ->
+                _ui.update { it.copy(latestBodyMetric = list.firstOrNull()) }
             }
         }
         viewModelScope.launch {
@@ -192,6 +203,26 @@ fun DashboardScreen(
                                 "SpO2 ort: ${snap.spo2Avg?.let { "%.1f%%".format(it) } ?: "—"}" +
                                     (snap.minutesBelow90?.let { " • %90 altı ${it}dk (tahmin)" } ?: "")
                             )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Kilo / Bel Çevresi", style = MaterialTheme.typography.titleMedium)
+                        val metric = ui.latestBodyMetric
+                        if (metric == null) {
+                            Text("Henüz ölçüm yok.")
+                        } else {
+                            Text(
+                                listOfNotNull(
+                                    metric.weightKg?.let { "%.1f kg".format(it) },
+                                    metric.waistCm?.let { "%.1f cm bel".format(it) }
+                                ).joinToString(" · ")
+                            )
+                            Text(metric.date.toString(), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
