@@ -68,7 +68,7 @@ class TwinViewModel @Inject constructor(
 }
 
 @Composable
-fun TwinScreen(onBack: () -> Unit, viewModel: TwinViewModel = hiltViewModel()) {
+fun TwinScreen(onBack: () -> Unit, onOpenHistory: () -> Unit = {}, viewModel: TwinViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -94,6 +94,9 @@ fun TwinScreen(onBack: () -> Unit, viewModel: TwinViewModel = hiltViewModel()) {
             }
             Button(onClick = viewModel::runManual, enabled = !ui.isLoading, modifier = Modifier.fillMaxWidth()) {
                 Text("Manuel iste")
+            }
+            Button(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
+                Text("Geçmiş")
             }
             Button(onClick = viewModel::runWeeklyReview, enabled = !ui.isLoading, modifier = Modifier.fillMaxWidth()) {
                 Text("Haftalık seyir analizi")

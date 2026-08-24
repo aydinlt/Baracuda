@@ -5,6 +5,7 @@ import com.aydin.biyohack.twin.TwinOutput
 import com.aydin.biyohack.twin.TwinStateBuilder
 import com.aydin.biyohack.twin.Trigger
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -51,6 +52,22 @@ class TwinRepository(
         output
     }
 
+    /**
+     * `twin_output_log` geçmişini okur — sabah protokolü her gün otomatik
+     * çalıştığı için (bkz. sync/TwinMorningWorker.kt) bu, geçmiş sonuçlara
+     * ulaşmanın tek yolu: TwinScreen'deki anlık state uygulama kapanınca kaybolur.
+     */
+    suspend fun observeHistory(limit: Int = 20): Result<List<TwinOutputHistoryEntry>> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        postgrest.from("twin_output_log")
+            .select {
+                filter { eq("user_id", userId) }
+                order("created_at", Order.DESCENDING)
+                limit(limit.toLong())
+            }
+            .decodeList<TwinOutputHistoryEntry>()
+    }
+
     private suspend fun logOutput(trigger: Trigger, tier: String, output: TwinOutput) {
         val userId = currentUserId() ?: return
         runCatching {
@@ -69,8 +86,19 @@ class TwinRepository(
     }
 }
 
+/** `observeHistory()` sonucu — liste görünümü için yeterli alanlar, tam `raw_json` dahil değil. */
+@Serializable
+data class TwinOutputHistoryEntry(
+    val id: String,
+    val trigger: String,
+    val tier: String,
+    val headline: String,
+    val brief: String,
+    @SerialName("created_at") val createdAt: String
+)
+
 // ────────────────────────────────────────────────────────────
-// twin_output_log satırı — yalnızca bu dosyanın içinde kullanılan,
+// twin_output_log satırı (yazma) — yalnızca bu dosyanın içinde kullanılan,
 // dışa sızdırılmayan Supabase DTO'ları.
 // ────────────────────────────────────────────────────────────
 
