@@ -37,11 +37,30 @@ class TwinStateBuilder(
             lastNight = snapshots.firstOrNull(),
             previousNights = snapshots.drop(1),
             todayIntake = todayIntake.map { it.toTwinEntry() },
-            userNote = userNote,
+            userNote = combinedNote(userNote),
             creatineFreeDays = healthSyncRepository.creatineFreeDays(),
             pendingTests = pendingTests,
             plannedTrainingToday = plannedTrainingToday,
             saunaPlannedToday = saunaPlannedToday
         )
+    }
+
+    /**
+     * TwinState.kt'nin sabit sözleşmesinde kilo/bel çevresi için ayrı bir
+     * alan yok (bkz. Hafta 11 — body_metric bu bilgiyi ekledi ama TwinState'i
+     * genişletmedi). Bunun yerine son ölçüm, kullanıcının kendi notunun
+     * ÖNÜNE eklenerek `userNote`'a taşınır — TwinStateSerializer zaten bu
+     * alanı "KULLANICI NOTU" başlığıyla prompt'a katıyor.
+     */
+    private suspend fun combinedNote(userNote: String?): String? {
+        val metric = healthSyncRepository.observeRecentBodyMetrics(limit = 1).first().firstOrNull()
+        val metricSummary = metric?.let {
+            val parts = listOfNotNull(
+                it.weightKg?.let { w -> "%.1f kg".format(w) },
+                it.waistCm?.let { c -> "%.1f cm bel".format(c) }
+            )
+            if (parts.isEmpty()) null else "Son ölçüm (${it.date}): ${parts.joinToString(", ")}"
+        }
+        return listOfNotNull(metricSummary, userNote).joinToString("\n").ifBlank { null }
     }
 }

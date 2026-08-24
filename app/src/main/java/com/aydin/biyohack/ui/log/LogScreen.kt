@@ -7,17 +7,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -73,6 +80,7 @@ private val SUPPLEMENT_PRESETS = listOf(
 @Composable
 fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    var showMealDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -114,10 +122,20 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Öğün", style = MaterialTheme.typography.titleMedium)
-                Button(
-                    onClick = { viewModel.log(IntakeKind.MEAL, "Öğün") },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Öğün yedim") }
+                Text(
+                    "Protein hedefi 140–170 g sabittir (bkz. Ayarlar) — girmek istersen protein sor.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.log(IntakeKind.MEAL, "Öğün") },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Öğün yedim") }
+                    OutlinedButton(
+                        onClick = { showMealDialog = true },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Protein gir") }
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -133,4 +151,39 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showMealDialog) {
+        MealProteinDialog(
+            onDismiss = { showMealDialog = false },
+            onConfirm = { proteinG ->
+                viewModel.log(IntakeKind.MEAL, "Öğün", proteinG, "g protein")
+                showMealDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun MealProteinDialog(onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
+    var protein by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Öğün — protein (g)") },
+        text = {
+            OutlinedTextField(
+                value = protein,
+                onValueChange = { protein = it },
+                label = { Text("Protein (g)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { protein.toDoubleOrNull()?.let(onConfirm) },
+                enabled = protein.toDoubleOrNull() != null
+            ) { Text("Ekle") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }
+    )
 }
