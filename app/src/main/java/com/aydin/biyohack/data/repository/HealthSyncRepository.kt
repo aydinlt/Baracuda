@@ -6,6 +6,7 @@ import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.SnapshotSource
 import com.aydin.biyohack.data.local.BodyMetricDao
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
@@ -81,6 +82,27 @@ class HealthSyncRepository(
             pushPendingSnapshots()
             snapshot
         }
+
+    /**
+     * Health Connect'te bu gece için kayıt yoksa (cihaz takılmadı, izin
+     * verilmedi, senkronizasyon henüz çalışmadı vb.) kullanıcının elle
+     * girdiği uyku süresini `source = MANUAL` ile kaydeder. Önceden bu durumda
+     * "Bu gece" kartı süresiz "Veri yok" kalıyordu ve TwinGuardrails her
+     * defasında "VERİ YOK" fact'i üretiyordu — schema.sql'deki `MANUAL` kaynak
+     * değeri hiçbir kod yolundan hiç yazılmıyordu.
+     */
+    suspend fun logManualSnapshot(date: LocalDate, asleepMin: Int): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val snapshot = DailySnapshot(
+            userId = userId,
+            date = date,
+            asleepMin = asleepMin,
+            source = SnapshotSource.MANUAL
+        )
+        dailySnapshotDao.upsert(snapshot.toEntity(SyncState.PENDING))
+        pushPendingSnapshots()
+        Unit
+    }
 
     /** Kullanıcının manuel logu — su/kahve/öğün/takviye. Anında yerelde görünür. */
     suspend fun logIntake(kind: IntakeKind, label: String, amount: Double?, unit: String?): Result<Unit> =
