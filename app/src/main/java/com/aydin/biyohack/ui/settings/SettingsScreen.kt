@@ -1,5 +1,6 @@
 package com.aydin.biyohack.ui.settings
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,12 +31,16 @@ import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.Profile
 import com.aydin.biyohack.data.repository.AuthRepository
 import com.aydin.biyohack.data.repository.ProfileRepository
+import com.aydin.biyohack.sync.TwinMorningWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -48,7 +53,8 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(SettingsUiState())
@@ -65,7 +71,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun save(waterTargetMl: Int, proteinMinG: Int, proteinMaxG: Int) {
+    fun save(waterTargetMl: Int, proteinMinG: Int, proteinMaxG: Int, wakeTarget: LocalTime) {
         val current = _ui.value.profile ?: return
         viewModelScope.launch {
             _ui.update { it.copy(isSaving = true, saved = false, error = null) }
@@ -73,11 +79,17 @@ class SettingsViewModel @Inject constructor(
                 current.copy(
                     waterTargetMl = waterTargetMl,
                     proteinTargetMinG = proteinMinG,
-                    proteinTargetMaxG = proteinMaxG
+                    proteinTargetMaxG = proteinMaxG,
+                    wakeTarget = wakeTarget
                 )
             )
             _ui.update {
                 it.copy(isSaving = false, saved = result.isSuccess, error = result.exceptionOrNull()?.message)
+            }
+            // TwinMorningWorker'ın bir sonraki çalışmasını, ertesi güne kadar beklemeden
+            // yeni kalkış hedefine göre hemen yeniden zamanlar (bkz. TwinMorningWorker.kt).
+            if (result.isSuccess) {
+                TwinMorningWorker.scheduleNext(appContext, wakeTarget.plusMinutes(30))
             }
         }
     }
@@ -94,6 +106,8 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     var waterTarget by remember { mutableStateOf("") }
     var proteinMin by remember { mutableStateOf("") }
     var proteinMax by remember { mutableStateOf("") }
+    var wakeTarget by remember { mutableStateOf("") }
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
 
     // Profil ilk kez yüklendiğinde form alanlarını doldur; sonraki güncellemelerde
     // kullanıcının o an düzenlediği metni ezmemek için yalnızca bir kez çalışır.
@@ -102,6 +116,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             waterTarget = p.waterTargetMl.toString()
             proteinMin = p.proteinTargetMinG.toString()
             proteinMax = p.proteinTargetMaxG.toString()
+            wakeTarget = p.wakeTarget.format(timeFormatter)
         }
     }
 
@@ -140,13 +155,22 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
+            OutlinedTextField(
+                value = wakeTarget,
+                onValueChange = { wakeTarget = it },
+                label = { Text("Kalkış hedefi (SS:dd, ör. 07:00)") },
+                // İkiz'in sabah protokolü artık bu saatten 30dk sonra otomatik çalışıyor
+                // (bkz. sync/TwinMorningWorker.kt) — daha önce sabit 07:30'du.
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Button(
                 onClick = {
                     val w = waterTarget.toIntOrNull() ?: return@Button
                     val pMin = proteinMin.toIntOrNull() ?: return@Button
                     val pMax = proteinMax.toIntOrNull() ?: return@Button
-                    viewModel.save(w, pMin, pMax)
+                    val wake = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.getOrNull() ?: return@Button
+                    viewModel.save(w, pMin, pMax, wake)
                 },
                 enabled = !ui.isSaving && ui.profile != null,
                 modifier = Modifier.fillMaxWidth()
