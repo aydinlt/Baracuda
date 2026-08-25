@@ -139,6 +139,21 @@ class TwinGuardrailsTest {
     }
 
     @Test
+    fun `ozel yatis hedefi kafein kesme saatini degistirir`() {
+        // Varsayılan yatış 23:00 → kafein kesme 13:00 (23:00 - 10sa). 12:30'da içilen
+        // kahve bu sınırın altında kaldığı için varsayılanla ihlal DEĞİL. Özel yatış
+        // hedefi 22:00 → kesme 12:00'a çekilir, aynı 12:30 kahvesi artık ihlal olur.
+        val s = state(
+            now = at(13, 0),
+            todayIntake = listOf(IntakeEntry(at(12, 30), IntakeType.COFFEE, "Filtre kahve"))
+        )
+        assertFalse(TwinGuardrails.buildFacts(s).any { it.startsWith("İHLAL") && it.contains("kahve") })
+
+        val customFacts = TwinGuardrails.buildFacts(s, bedEarliestHour = 22)
+        assertTrue(customFacts.any { it.startsWith("İHLAL") && it.contains("kahve") && it.contains("12:00") })
+    }
+
+    @Test
     fun `ozel kalkis hedefi sapma esigini degistirir`() {
         // Kalkış 09:00. Varsayılan hedef 7 → izinli aralık 6..8 → 9 dışarıda, sapma
         // fact'i üretilir. Özel hedef 9 → izinli aralık 8..10 → 9 içeride, üretilmez.

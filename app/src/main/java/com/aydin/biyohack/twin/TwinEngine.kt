@@ -62,10 +62,10 @@ class TwinEngine(
      * protokolü = deep, diğerleri = fast). Haftalık seyir analizi gibi
      * trigger'dan bağımsız senaryolar için "weekly" (Opus) buradan geçilir
      * — bkz. supabase/functions/twin/index.ts MODELS.weekly.
-     * @param waterTargetMl/proteinMinG/proteinMaxG/wakeTargetHour — verilmezse
-     * TwinGuardrails kendi varsayılanlarını kullanır. Kullanıcının Ayarlar'da
-     * belirlediği gerçek hedefleri kural motoruna taşımak için (bkz. Hafta 21
-     * commit notu) TwinRepository buradan geçirir.
+     * @param waterTargetMl/proteinMinG/proteinMaxG/wakeTargetHour/bedEarliestHour —
+     * verilmezse TwinGuardrails kendi varsayılanlarını kullanır. Kullanıcının
+     * Ayarlar'da belirlediği gerçek hedefleri kural motoruna taşımak için (bkz.
+     * Hafta 21/52 commit notu) TwinRepository buradan geçirir.
      */
     suspend fun generate(
         state: TwinState,
@@ -73,10 +73,13 @@ class TwinEngine(
         waterTargetMl: Int? = null,
         proteinMinG: Int? = null,
         proteinMaxG: Int? = null,
-        wakeTargetHour: Int? = null
+        wakeTargetHour: Int? = null,
+        bedEarliestHour: Int? = null
     ): Result<TwinOutput> = withContext(Dispatchers.IO) {
         runCatching {
-            val facts = TwinGuardrails.buildFacts(state, waterTargetMl, proteinMinG, proteinMaxG, wakeTargetHour)
+            val facts = TwinGuardrails.buildFacts(
+                state, waterTargetMl, proteinMinG, proteinMaxG, wakeTargetHour, bedEarliestHour
+            )
             // waterTargetMl/wakeTargetHour buildFacts()'a zaten geçiriliyordu ama
             // toPromptBlock()'a hiç ulaşmıyordu — bkz. TwinState.kt commit notu.
             val stateBlock = TwinStateSerializer.toPromptBlock(state, facts, waterTargetMl, wakeTargetHour)

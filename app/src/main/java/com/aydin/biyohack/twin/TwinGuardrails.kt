@@ -29,20 +29,23 @@ object TwinGuardrails {
     // ───────────────────────────────────────────────────────
 
     /**
-     * [waterTargetMl]/[proteinMinG]/[proteinMaxG]/[wakeTargetHour] — null bırakılırsa
-     * yukarıdaki sabitler kullanılır (geriye dönük uyumlu varsayılan). Bu dört değer
-     * artık SettingsScreen'den düzenlenebiliyor (bkz. Profile.waterTargetMl vb., Hafta
-     * 7/17) — kural motoru önceden bunlardan habersiz sabit değerlerle çalışıyordu,
-     * yani kullanıcı hedefini değiştirse bile İkiz eski varsayılana göre uyarı üretiyordu.
-     * `EARLIEST_BED` kasıtlı olarak parametreleştirilmedi: Profile.bedEarliest hâlâ hiçbir
-     * yerde düzenlenebilir değil (bkz. Hafta 17 commit notu), o yüzden burada da sabit kaldı.
+     * [waterTargetMl]/[proteinMinG]/[proteinMaxG]/[wakeTargetHour]/[bedEarliestHour] —
+     * null bırakılırsa yukarıdaki sabitler kullanılır (geriye dönük uyumlu varsayılan).
+     * Bu beş değer artık SettingsScreen'den düzenlenebiliyor (bkz. Profile.waterTargetMl
+     * vb., Hafta 7/17/52) — kural motoru önceden bunlardan habersiz sabit değerlerle
+     * çalışıyordu, yani kullanıcı hedefini değiştirse bile İkiz eski varsayılana göre
+     * uyarı üretiyordu. `bedEarliestHour` en son eklenendi (Hafta 52) — bu yorum önceden
+     * Profile.bedEarliest'in hiçbir yerde düzenlenebilir olmadığını, bu yüzden kasıtlı
+     * olarak parametreleştirilmediğini söylüyordu (bkz. Hafta 17 commit notu); artık
+     * diğer dört hedefle aynı desende SettingsScreen'den geliyor.
      */
     fun buildFacts(
         s: TwinState,
         waterTargetMl: Int? = null,
         proteinMinG: Int? = null,
         proteinMaxG: Int? = null,
-        wakeTargetHour: Int? = null
+        wakeTargetHour: Int? = null,
+        bedEarliestHour: Int? = null
     ): List<String> {
         val waterTarget = waterTargetMl ?: WATER_TARGET_ML
         val protMin = proteinMinG ?: PROTEIN_MIN_G
@@ -51,7 +54,7 @@ object TwinGuardrails {
 
         val facts = mutableListOf<String>()
         val nowTime = s.now.atZone(zone).toLocalTime()
-        val bedTarget = LocalTime.of(EARLIEST_BED, 0)
+        val bedTarget = LocalTime.of(bedEarliestHour ?: EARLIEST_BED, 0)
 
         // --- Kafein ---
         val caffeineCutoff = bedTarget.minusHours(CAFFEINE_CUTOFF_H) // 13:00

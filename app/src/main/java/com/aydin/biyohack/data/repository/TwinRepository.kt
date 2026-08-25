@@ -43,7 +43,8 @@ class TwinRepository(
             waterTargetMl = profile?.waterTargetMl,
             proteinMinG = profile?.proteinTargetMinG,
             proteinMaxG = profile?.proteinTargetMaxG,
-            wakeTargetHour = profile?.wakeTarget?.hour
+            wakeTargetHour = profile?.wakeTarget?.hour,
+            bedEarliestHour = profile?.bedEarliest?.hour
         ).getOrThrow()
         logOutput(trigger, tier, output)
         persistClinicalFlags(output)
@@ -79,7 +80,8 @@ class TwinRepository(
             waterTargetMl = profile?.waterTargetMl,
             proteinMinG = profile?.proteinTargetMinG,
             proteinMaxG = profile?.proteinTargetMaxG,
-            wakeTargetHour = profile?.wakeTarget?.hour
+            wakeTargetHour = profile?.wakeTarget?.hour,
+            bedEarliestHour = profile?.bedEarliest?.hour
         ).getOrThrow()
         logOutput(Trigger.MANUAL, "weekly", output)
         persistClinicalFlags(output)
