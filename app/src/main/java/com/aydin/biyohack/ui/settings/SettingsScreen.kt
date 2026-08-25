@@ -91,7 +91,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun save(waterTargetMl: Int, proteinMinG: Int, proteinMaxG: Int, wakeTarget: LocalTime) {
+    fun save(waterTargetMl: Int, proteinMinG: Int, proteinMaxG: Int, wakeTarget: LocalTime, stepsTarget: Int) {
         val current = _ui.value.profile ?: return
         viewModelScope.launch {
             _ui.update { it.copy(isSaving = true, saved = false, error = null) }
@@ -100,7 +100,8 @@ class SettingsViewModel @Inject constructor(
                     waterTargetMl = waterTargetMl,
                     proteinTargetMinG = proteinMinG,
                     proteinTargetMaxG = proteinMaxG,
-                    wakeTarget = wakeTarget
+                    wakeTarget = wakeTarget,
+                    stepsTarget = stepsTarget
                 )
             )
             _ui.update {
@@ -128,6 +129,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     var proteinMin by remember { mutableStateOf("") }
     var proteinMax by remember { mutableStateOf("") }
     var wakeTarget by remember { mutableStateOf("") }
+    var stepsTarget by remember { mutableStateOf("") }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
 
     // Profil ilk kez yüklendiğinde form alanlarını doldur; sonraki güncellemelerde
@@ -138,6 +140,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             proteinMin = p.proteinTargetMinG.toString()
             proteinMax = p.proteinTargetMaxG.toString()
             wakeTarget = p.wakeTarget.format(timeFormatter)
+            stepsTarget = p.stepsTarget.toString()
         }
     }
 
@@ -184,6 +187,16 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 // (bkz. sync/TwinMorningWorker.kt) — daha önce sabit 07:30'du.
                 modifier = Modifier.fillMaxWidth()
             )
+            OutlinedTextField(
+                value = stepsTarget,
+                onValueChange = { stepsTarget = it },
+                label = { Text("Adım hedefi") },
+                // Önceden bu hedef yalnızca DashboardScreen'de sabit 10.000 olarak kod
+                // içine gömülüydü (bkz. Hafta 39 commit notu) — su/protein/kalkış gibi
+                // düzenlenebilir değildi.
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // Önceden bu buton alan içerikleri geçersizken bile her zaman aktifti —
             // tıklamak return@Button'a düşüp sessizce hiçbir şey yapmıyordu, LabScreen'in
@@ -196,16 +209,18 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             val waterValid = (waterTarget.toIntOrNull() ?: 0) > 0
             val proteinMinValid = (proteinMin.toIntOrNull() ?: 0) > 0
             val proteinMaxValid = (proteinMax.toIntOrNull() ?: 0) > 0
+            val stepsValid = (stepsTarget.toIntOrNull() ?: 0) > 0
             Button(
                 onClick = {
                     val w = waterTarget.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
                     val pMin = proteinMin.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
                     val pMax = proteinMax.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
                     val wake = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.getOrNull() ?: return@Button
-                    viewModel.save(w, pMin, pMax, wake)
+                    val steps = stepsTarget.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
+                    viewModel.save(w, pMin, pMax, wake, steps)
                 },
                 enabled = !ui.isSaving && ui.profile != null &&
-                    waterValid && proteinMinValid && proteinMaxValid && wakeValid,
+                    waterValid && proteinMinValid && proteinMaxValid && wakeValid && stepsValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (ui.isSaving) "Kaydediliyor..." else "Kaydet")

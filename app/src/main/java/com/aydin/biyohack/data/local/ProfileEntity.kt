@@ -22,6 +22,7 @@ data class ProfileEntity(
     val proteinTargetMaxG: Int,
     val wakeTarget: LocalTime,
     val bedEarliest: LocalTime,
+    val stepsTarget: Int,
     val syncState: SyncState
 )
 
@@ -37,6 +38,7 @@ fun Profile.toEntity(syncState: SyncState = SyncState.PENDING) = ProfileEntity(
     proteinTargetMaxG = proteinTargetMaxG,
     wakeTarget = wakeTarget,
     bedEarliest = bedEarliest,
+    stepsTarget = stepsTarget,
     syncState = syncState
 )
 
@@ -51,7 +53,8 @@ fun ProfileEntity.toDomain() = Profile(
     proteinTargetMinG = proteinTargetMinG,
     proteinTargetMaxG = proteinTargetMaxG,
     wakeTarget = wakeTarget,
-    bedEarliest = bedEarliest
+    bedEarliest = bedEarliest,
+    stepsTarget = stepsTarget
 )
 
 @Dao
