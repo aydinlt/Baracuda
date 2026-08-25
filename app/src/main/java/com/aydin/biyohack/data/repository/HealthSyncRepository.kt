@@ -380,6 +380,30 @@ class HealthSyncRepository(
         }
     }
 
+    /**
+     * Yanlış/yanlış güne düşmüş bir gecelik özeti (uyku/SpO2) siler. Aynı sınıftan
+     * eksik deleteBodyMetric ile bulundu (bkz. Hafta 43 commit notu): `daily_snapshot`
+     * da epochDay PK ile upsert ediyor, yani AYNI GÜN tekrar senkronize/elle
+     * girilirse üzerine yazılıyordu ama geçmiş bir günün kaydını (özellikle
+     * `logManualSnapshot` ile elle girilmiş, kaynağı Health Connect olmayan bir
+     * kaydı — bkz. SnapshotSource.MANUAL) silmenin hiçbir yolu yoktu. Health
+     * Connect kaynaklı bir kayıt silinirse bir sonraki syncAll() onu otomatik
+     * geri getirir (bu istenen davranış — kaynak veri hâlâ cihazda); MANUAL
+     * kayıtlar için ise kalıcı bir düzeltme yoludur.
+     */
+    suspend fun deleteDailySnapshot(epochDay: Long): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val date = LocalDate.ofEpochDay(epochDay)
+        postgrest.from("daily_snapshot").delete {
+            filter {
+                eq("user_id", userId)
+                eq("date", date.toString())
+            }
+        }
+        dailySnapshotDao.delete(epochDay)
+        Unit
+    }
+
     suspend fun pushPendingSnapshots() = runCatching {
         dailySnapshotDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
