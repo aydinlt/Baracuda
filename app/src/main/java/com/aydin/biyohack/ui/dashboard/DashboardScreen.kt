@@ -393,7 +393,9 @@ fun DashboardScreen(
                     Text("Su hızlı log", style = MaterialTheme.typography.titleMedium)
                     Text("${waterMl.toInt()} / ${ui.waterTargetMl} ml")
                     LinearProgressIndicator(
-                        progress = { (waterMl / ui.waterTargetMl).toFloat().coerceIn(0f, 1f) },
+                        // coerceAtLeast(1): hedef 0/negatifse (ör. Supabase'den doğrudan
+                        // düzenlenmiş eski bir profil satırı) sıfıra bölme/NaN olmasın diye.
+                        progress = { (waterMl / ui.waterTargetMl.coerceAtLeast(1)).toFloat().coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -414,7 +416,7 @@ fun DashboardScreen(
                     Text("Protein", style = MaterialTheme.typography.titleMedium)
                     Text("${proteinG.toInt()} g (hedef ${ui.proteinTargetMinG}–${ui.proteinTargetMaxG} g)")
                     LinearProgressIndicator(
-                        progress = { (proteinG / ui.proteinTargetMinG).toFloat().coerceIn(0f, 1f) },
+                        progress = { (proteinG / ui.proteinTargetMinG.coerceAtLeast(1)).toFloat().coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

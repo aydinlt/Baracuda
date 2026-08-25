@@ -20,6 +20,8 @@ import javax.inject.Singleton
 
 private const val CHANNEL_ID = "twin_protocol"
 private const val NOTIFICATION_ID = 1001
+private const val REMINDER_CHANNEL_ID = "daily_reminder"
+private const val REMINDER_NOTIFICATION_ID = 1002
 
 /**
  * TwinOutput'u bildirime çevirir. Yalnızca headline/brief gösterilir —
@@ -38,12 +40,15 @@ class TwinNotifier @Inject constructor(
 ) {
     init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "İkiz protokolü",
-                NotificationManager.IMPORTANCE_DEFAULT
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "İkiz protokolü", NotificationManager.IMPORTANCE_DEFAULT)
             )
-            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+            // Ayrı kanal: İkiz'in klinik/protokol çıktısından farklı bir amaç taşıyor
+            // (bkz. MiddayReminderWorker) — kullanıcı ikisini ayrı ayrı kapatabilsin.
+            manager?.createNotificationChannel(
+                NotificationChannel(REMINDER_CHANNEL_ID, "Günlük hatırlatmalar", NotificationManager.IMPORTANCE_DEFAULT)
+            )
         }
     }
 
@@ -75,5 +80,40 @@ class TwinNotifier @Inject constructor(
             .build()
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    }
+
+    /**
+     * Klinik/protokol çıktısıyla ilgisi olmayan basit metin bildirimi —
+     * MiddayReminderWorker'ın "bugün henüz su/protein logu yok" hatırlatması
+     * için. Dokunulduğunda LogScreen'i AÇMAZ (MainActivity'de o yönlendirme
+     * henüz yok) — yalnızca uygulamayı öne getirir, bilinçli bir sınırlama.
+     */
+    @SuppressLint("MissingPermission")
+    fun notifyReminder(title: String, text: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) return
+
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            REMINDER_NOTIFICATION_ID,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(REMINDER_NOTIFICATION_ID, notification)
     }
 }

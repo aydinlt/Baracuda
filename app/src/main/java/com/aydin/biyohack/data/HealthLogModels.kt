@@ -49,3 +49,40 @@ data class ClinicalFlagRecord(
     val raisedAt: Instant = Instant.now(),
     val resolved: Boolean = false
 )
+
+/**
+ * Kullanıcının kendi tanımladığı hızlı log şablonu ("Standart Sabah Kahvesi",
+ * "Klasik Akşam Yemeği" vb.) — [IntakeRecord] ile aynı alanları taşır ama
+ * kendisi bir log değildir, LogScreen'de tek dokunuşla yeni bir [IntakeRecord]
+ * üretmek için kullanılan bir "kalıp"tır. Önceden LogScreen'de yalnızca sabit,
+ * kod içine gömülü hazır butonlar (su/kahve/takviye presetleri) vardı —
+ * kullanıcının kendi sık tükettiği kombinasyonları (ör. belirli bir öğün)
+ * kaydedebileceği hiçbir yer yoktu.
+ */
+data class QuickTemplate(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String,
+    val kind: IntakeKind,
+    val label: String,
+    val amount: Double? = null,
+    val unit: String? = null,
+    val createdAt: Instant = Instant.now()
+)
+
+/**
+ * "Sık tekrarlanan panel" şablonu — [QuickTemplate]'in laboratuvar karşılığı.
+ * Değer/tarih taşımaz (her tahlilde değişir), yalnızca panel+marker+birim+
+ * referans aralığını sabitler. LabScreen'de dokunulduğunda "sonuç ekle"
+ * diyaloğunu bu alanlarla önceden doldurulmuş açar — kullanıcı yalnızca
+ * değeri ve tarihi girer.
+ */
+data class LabResultTemplate(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String,
+    val panel: String,
+    val marker: String,
+    val unit: String? = null,
+    val refLow: Double? = null,
+    val refHigh: Double? = null,
+    val createdAt: Instant = Instant.now()
+)

@@ -57,5 +57,59 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/**
+ * v3 → v4: `quick_template` tablosu eklendi (Hafta 41 — Hızlı Şablonlar ve
+ * Favoriler). Kolon adları [QuickTemplateEntity] ve supabase/schema.sql'deki
+ * `quick_template` tablosuyla birebir eşleşir; `createdAt` Converters.kt'deki
+ * Instant↔epoch-millis dönüştürücüsü yüzünden INTEGER'dır.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `quick_template` (
+                `id` TEXT NOT NULL,
+                `userId` TEXT NOT NULL,
+                `kind` TEXT NOT NULL,
+                `label` TEXT NOT NULL,
+                `amount` REAL,
+                `unit` TEXT,
+                `createdAt` INTEGER NOT NULL,
+                `syncState` TEXT NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+/**
+ * v4 → v5: `lab_result_template` tablosu eklendi (Hafta 42 — LabScreen için
+ * "sık tekrarlanan panel" şablonu, quick_template'in laboratuvar karşılığı).
+ * `quick_template` şeması bu sürümde değişmedi (yalnızca yeni bir `update`
+ * DAO metodu eklendi, kolon eklenmedi) — bu yüzden ayrı bir migration adımı
+ * gerektirmedi.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `lab_result_template` (
+                `id` TEXT NOT NULL,
+                `userId` TEXT NOT NULL,
+                `panel` TEXT NOT NULL,
+                `marker` TEXT NOT NULL,
+                `unit` TEXT,
+                `refLow` REAL,
+                `refHigh` REAL,
+                `createdAt` INTEGER NOT NULL,
+                `syncState` TEXT NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 /** di/AppModule.kt'de `Room.databaseBuilder(...).addMigrations(*ALL_MIGRATIONS)` ile kullanılır. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

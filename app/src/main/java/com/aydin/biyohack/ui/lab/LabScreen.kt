@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -32,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.ClinicalFlagRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.LabResultTemplate
 import com.aydin.biyohack.data.repository.HealthSyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +48,7 @@ import javax.inject.Inject
 data class LabUiState(
     val results: List<LabResult> = emptyList(),
     val flags: List<ClinicalFlagRecord> = emptyList(),
+    val templates: List<LabResultTemplate> = emptyList(),
     val error: String? = null
 )
 
@@ -59,9 +62,14 @@ class LabViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.observeLabResults()
-                .combine(repository.observeUnresolvedFlags()) { results, flags -> results to flags }
-                .collect { (results, flags) -> _ui.update { it.copy(results = results, flags = flags) } }
+            combine(
+                repository.observeLabResults(),
+                repository.observeUnresolvedFlags(),
+                repository.observeLabResultTemplates()
+            ) { results, flags, templates -> Triple(results, flags, templates) }
+                .collect { (results, flags, templates) ->
+                    _ui.update { it.copy(results = results, flags = flags, templates = templates) }
+                }
         }
     }
 
@@ -100,6 +108,20 @@ class LabViewModel @Inject constructor(
             _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
         }
     }
+
+    fun addTemplate(panel: String, marker: String, unit: String?, refLow: Double?, refHigh: Double?) {
+        viewModelScope.launch {
+            val result = repository.addLabResultTemplate(panel, marker, unit, refLow, refHigh)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
+    }
+
+    fun deleteTemplate(id: String) {
+        viewModelScope.launch {
+            val result = repository.deleteLabResultTemplate(id)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
+    }
 }
 
 /** Referans aralığının dışında mı — aralık bilinmiyorsa (null) değerlendirme yapılmaz. */
@@ -116,6 +138,10 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
 
     var showResultDialog by remember { mutableStateOf(false) }
     var showFlagDialog by remember { mutableStateOf(false) }
+    var showTemplateDialog by remember { mutableStateOf(false) }
+    // Bir "sık tekrarlanan panel" şablonuna dokunulduğunda AddResultDialog'u
+    // bu değerlerle önceden doldurulmuş açmak için — null ise FAB'dan boş açılır.
+    var resultPrefill by remember { mutableStateOf<LabResultTemplate?>(null) }
 
     Scaffold(
         topBar = {
@@ -125,7 +151,10 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showResultDialog = true }) { Text("+") }
+            FloatingActionButton(onClick = {
+                resultPrefill = null
+                showResultDialog = true
+            }) { Text("+") }
         }
     ) { padding ->
         LazyColumn(
@@ -160,6 +189,41 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
                         }
                         TextButton(onClick = { viewModel.resolveFlag(flag.id) }) { Text("Çözüldü") }
                     }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Şablonlar", style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = { showTemplateDialog = true }) { Text("+ Şablon") }
+                }
+            }
+            if (ui.templates.isEmpty()) {
+                item {
+                    Text(
+                        "Her tahlilde tekrarlanan bir marker'ı (ör. eGFR — BÖBREK) şablon " +
+                            "olarak kaydedebilirsin; dokunduğunda panel/marker/birim/referans " +
+                            "önceden doldurulmuş açılır, yalnızca değeri girmen yeter.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            items(ui.templates) { template ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            resultPrefill = template
+                            showResultDialog = true
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("${template.panel} — ${template.marker}") }
+                    TextButton(onClick = { viewModel.deleteTemplate(template.id) }) { Text("Sil") }
                 }
             }
 
@@ -217,10 +281,15 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
 
     if (showResultDialog) {
         AddResultDialog(
-            onDismiss = { showResultDialog = false },
+            initial = resultPrefill,
+            onDismiss = {
+                showResultDialog = false
+                resultPrefill = null
+            },
             onConfirm = { panel, marker, value, unit, refLow, refHigh, takenAt ->
                 viewModel.addResult(panel, marker, value, unit, refLow, refHigh, takenAt)
                 showResultDialog = false
+                resultPrefill = null
             }
         )
     }
@@ -234,22 +303,35 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
             }
         )
     }
+
+    if (showTemplateDialog) {
+        AddLabTemplateDialog(
+            onDismiss = { showTemplateDialog = false },
+            onConfirm = { panel, marker, unit, refLow, refHigh ->
+                viewModel.addTemplate(panel, marker, unit, refLow, refHigh)
+                showTemplateDialog = false
+            }
+        )
+    }
 }
 
 @Composable
 private fun AddResultDialog(
+    initial: LabResultTemplate? = null,
     onDismiss: () -> Unit,
     onConfirm: (
         panel: String, marker: String, value: Double, unit: String?,
         refLow: Double?, refHigh: Double?, takenAt: LocalDate
     ) -> Unit
 ) {
-    var panel by remember { mutableStateOf("") }
-    var marker by remember { mutableStateOf("") }
+    // Bir şablondan açıldıysa panel/marker/birim/referans önceden dolu gelir —
+    // kullanıcının yalnızca değeri (ve gerekirse tarihi) girmesi yeterli olur.
+    var panel by remember { mutableStateOf(initial?.panel ?: "") }
+    var marker by remember { mutableStateOf(initial?.marker ?: "") }
     var value by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("") }
-    var refLow by remember { mutableStateOf("") }
-    var refHigh by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf(initial?.unit ?: "") }
+    var refLow by remember { mutableStateOf(initial?.refLow?.toString() ?: "") }
+    var refHigh by remember { mutableStateOf(initial?.refHigh?.toString() ?: "") }
     // Varsayılan bugün — ama lab raporları genelde kan alımından günler sonra elde
     // ediyor, önceden bu alan hiç sorulmuyordu ve her sonuç sessizce "bugün" tarihiyle
     // kaydediliyordu (bkz. Hafta 18 commit notu).
@@ -313,6 +395,45 @@ private fun AddFlagDialog(onDismiss: () -> Unit, onConfirm: (finding: String, st
                 onClick = { onConfirm(finding.trim(), status.trim()) },
                 enabled = finding.isNotBlank() && status.isNotBlank()
             ) { Text("Ekle") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }
+    )
+}
+
+@Composable
+private fun AddLabTemplateDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (panel: String, marker: String, unit: String?, refLow: Double?, refHigh: Double?) -> Unit
+) {
+    var panel by remember { mutableStateOf("") }
+    var marker by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf("") }
+    var refLow by remember { mutableStateOf("") }
+    var refHigh by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Panel şablonu ekle") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = panel, onValueChange = { panel = it }, label = { Text("Panel (ör. BÖBREK)") })
+                OutlinedTextField(value = marker, onValueChange = { marker = it }, label = { Text("Marker (ör. eGFR)") })
+                OutlinedTextField(value = unit, onValueChange = { unit = it }, label = { Text("Birim (opsiyonel)") })
+                OutlinedTextField(value = refLow, onValueChange = { refLow = it }, label = { Text("Ref alt (opsiyonel)") })
+                OutlinedTextField(value = refHigh, onValueChange = { refHigh = it }, label = { Text("Ref üst (opsiyonel)") })
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(
+                        panel.trim(), marker.trim(),
+                        unit.trim().ifBlank { null },
+                        refLow.toDoubleOrNull(), refHigh.toDoubleOrNull()
+                    )
+                },
+                enabled = panel.isNotBlank() && marker.isNotBlank()
+            ) { Text("Kaydet") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }
     )

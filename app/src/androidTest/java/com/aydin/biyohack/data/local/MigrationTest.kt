@@ -81,6 +81,68 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate3To4_addsQuickTemplateTableWithoutTouchingExistingData() {
+        // v3 şemasıyla veritabanını oluştur ve body_metric'e bir satır yaz.
+        helper.createDatabase(TEST_DB, 3).apply {
+            execSQL(
+                """
+                INSERT INTO body_metric (epochDay, userId, weightKg, waistCm, notes, syncState)
+                VALUES (19000, 'test-user', 84.0, 92.0, NULL, 'SYNCED')
+                """.trimIndent()
+            )
+            close()
+        }
+
+        // Migration'ı çalıştır: yeni `quick_template` şemasını doğrular, eski veriyi korur,
+        // ve yeni tabloya bir satır yazılabildiğini kanıtlar (kolon adları/tipler tutarlı mı).
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4).apply {
+            val bodyMetricCursor = query("SELECT userId FROM body_metric WHERE epochDay = 19000")
+            bodyMetricCursor.use { assert(it.moveToFirst()) { "v3'te yazılan body_metric satırı migration sonrası kayboldu" } }
+
+            execSQL(
+                """
+                INSERT INTO quick_template (id, userId, kind, label, amount, unit, createdAt, syncState)
+                VALUES ('t1', 'test-user', 'COFFEE', 'Standart Sabah Kahvesi', NULL, NULL, 1700000000000, 'PENDING')
+                """.trimIndent()
+            )
+            val templateCursor = query("SELECT label FROM quick_template WHERE id = 't1'")
+            templateCursor.use { assert(it.moveToFirst()) { "quick_template'e yazılan satır okunamadı" } }
+            close()
+        }
+    }
+
+    @Test
+    fun migrate4To5_addsLabResultTemplateTableWithoutTouchingExistingData() {
+        // v4 şemasıyla veritabanını oluştur ve quick_template'e bir satır yaz.
+        helper.createDatabase(TEST_DB, 4).apply {
+            execSQL(
+                """
+                INSERT INTO quick_template (id, userId, kind, label, amount, unit, createdAt, syncState)
+                VALUES ('t1', 'test-user', 'COFFEE', 'Standart Sabah Kahvesi', NULL, NULL, 1700000000000, 'SYNCED')
+                """.trimIndent()
+            )
+            close()
+        }
+
+        // Migration'ı çalıştır: yeni `lab_result_template` şemasını doğrular, eski veriyi
+        // korur, ve yeni tabloya bir satır yazılabildiğini kanıtlar.
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5).apply {
+            val templateCursor = query("SELECT label FROM quick_template WHERE id = 't1'")
+            templateCursor.use { assert(it.moveToFirst()) { "v4'te yazılan quick_template satırı migration sonrası kayboldu" } }
+
+            execSQL(
+                """
+                INSERT INTO lab_result_template (id, userId, panel, marker, unit, refLow, refHigh, createdAt, syncState)
+                VALUES ('lt1', 'test-user', 'BÖBREK', 'eGFR', 'mL/min', 90.0, NULL, 1700000000000, 'PENDING')
+                """.trimIndent()
+            )
+            val labTemplateCursor = query("SELECT marker FROM lab_result_template WHERE id = 'lt1'")
+            labTemplateCursor.use { assert(it.moveToFirst()) { "lab_result_template'e yazılan satır okunamadı" } }
+            close()
+        }
+    }
+
     companion object {
         private const val TEST_DB = "migration-test"
     }

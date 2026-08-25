@@ -11,9 +11,11 @@ import androidx.room.TypeConverters
         LabResultEntity::class,
         ClinicalFlagEntity::class,
         ProfileEntity::class,
-        BodyMetricEntity::class
+        BodyMetricEntity::class,
+        QuickTemplateEntity::class,
+        LabResultTemplateEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -24,6 +26,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun clinicalFlagDao(): ClinicalFlagDao
     abstract fun profileDao(): ProfileDao
     abstract fun bodyMetricDao(): BodyMetricDao
+    abstract fun quickTemplateDao(): QuickTemplateDao
+    abstract fun labResultTemplateDao(): LabResultTemplateDao
 
     companion object {
         const val DB_NAME = "biyohack.db"

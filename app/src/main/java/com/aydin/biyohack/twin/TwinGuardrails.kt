@@ -60,7 +60,7 @@ object TwinGuardrails {
             val last = coffees.maxOf { it.ts }.atZone(zone).toLocalTime()
             if (last.isAfter(caffeineCutoff)) {
                 facts += "İHLAL: Son kahve $last — kafein kesme saati $caffeineCutoff " +
-                    "(yatış 23:00 − 10 sa). Bugün başka kafein alınmamalı."
+                    "(yatış $bedTarget − $CAFFEINE_CUTOFF_H sa). Bugün başka kafein alınmamalı."
             } else {
                 facts += "Kafein penceresi uygun (son: $last, sınır: $caffeineCutoff). " +
                     "Bugün $caffeineCutoff sonrası kafein alınmamalı."
@@ -136,7 +136,7 @@ object TwinGuardrails {
             if (mins > 600)
                 facts += "Dün ${mins / 60}s ${mins % 60}d uyunmuş (>10 sa). Uyku basıncı " +
                     "tükendiği için bu gece dalma zorlaşacak — bu UYKUSUZLUK DEĞİL, " +
-                    "aşırı uykunun sonucu. Bugün şekerleme yok, yatak 23:00'ten önce yok."
+                    "aşırı uykunun sonucu. Bugün şekerleme yok, yatak $bedTarget'ten önce yok."
         }
         s.lastNight?.efficiencyPct?.let { eff ->
             if (eff < 80)

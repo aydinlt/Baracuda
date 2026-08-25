@@ -6,12 +6,16 @@ import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.LabResultTemplate
+import com.aydin.biyohack.data.QuickTemplate
 import com.aydin.biyohack.data.SnapshotSource
 import com.aydin.biyohack.data.local.BodyMetricDao
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
 import com.aydin.biyohack.data.local.IntakeRecordDao
 import com.aydin.biyohack.data.local.LabResultDao
+import com.aydin.biyohack.data.local.LabResultTemplateDao
+import com.aydin.biyohack.data.local.QuickTemplateDao
 import com.aydin.biyohack.data.local.SyncState
 import com.aydin.biyohack.data.local.toDomain
 import com.aydin.biyohack.data.local.toEntity
@@ -19,10 +23,16 @@ import com.aydin.biyohack.data.remote.toDomain
 import com.aydin.biyohack.data.remote.toRow
 import com.aydin.biyohack.health.HealthDataSource
 import io.github.jan.supabase.postgrest.Postgrest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
@@ -37,6 +47,8 @@ class HealthSyncRepository(
     private val labResultDao: LabResultDao,
     private val clinicalFlagDao: ClinicalFlagDao,
     private val bodyMetricDao: BodyMetricDao,
+    private val quickTemplateDao: QuickTemplateDao,
+    private val labResultTemplateDao: LabResultTemplateDao,
     private val postgrest: Postgrest,
     private val healthDataSource: HealthDataSource,
     private val currentUserId: suspend () -> String?
@@ -44,13 +56,33 @@ class HealthSyncRepository(
     fun observeRecentSnapshots(limit: Int = 14): Flow<List<DailySnapshot>> =
         dailySnapshotDao.observeRecent(limit).map { list -> list.map { it.toDomain() } }
 
-    fun observeTodayIntake(): Flow<List<IntakeRecord>> {
-        val startOfDay = LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault())
-            .toInstant().toEpochMilli()
-        val endOfDay = LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault())
-            .toInstant().toEpochMilli()
-        return intakeRecordDao.observeBetween(startOfDay, endOfDay)
-            .map { list -> list.map { it.toDomain() } }
+    /**
+     * ÖNEMLİ: "bugün" sınırı önceden bu fonksiyon ÇAĞRILDIĞI anda tek seferlik
+     * hesaplanıyordu. DashboardViewModel gibi uzun ömürlü bir collector Activity
+     * yeniden oluşturulmadan gece yarısını geçerse, Room'un Flow'u tablo
+     * değişmediği sürece hiç yeniden emit etmediği için "bugünkü loglar" listesi
+     * sessizce dünün penceresinde kilitli kalırdı — su/protein ilerleme çubukları
+     * ve TwinGuardrails'e giden todayIntake de aynı şekilde yanlış günü gösterirdi.
+     * [dateChangeTicker] her gece yarısı yeni bir tarih yayınlayıp alt sorguyu
+     * [flatMapLatest] ile yeniden kurar.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeTodayIntake(): Flow<List<IntakeRecord>> =
+        dateChangeTicker().flatMapLatest { today ->
+            val zone = ZoneId.systemDefault()
+            val startOfDay = today.atStartOfDay(zone).toInstant().toEpochMilli()
+            val endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            intakeRecordDao.observeBetween(startOfDay, endOfDay)
+        }.map { list -> list.map { it.toDomain() } }
+
+    private fun dateChangeTicker(): Flow<LocalDate> = flow {
+        while (true) {
+            val today = LocalDate.now()
+            emit(today)
+            val zone = ZoneId.systemDefault()
+            val nextMidnight = today.plusDays(1).atStartOfDay(zone)
+            delay(Duration.between(ZonedDateTime.now(zone), nextMidnight).toMillis().coerceAtLeast(1_000))
+        }
     }
 
     fun observeLabResults(): Flow<List<LabResult>> =
@@ -61,6 +93,14 @@ class HealthSyncRepository(
 
     fun observeRecentBodyMetrics(limit: Int = 30): Flow<List<BodyMetric>> =
         bodyMetricDao.observeRecent(limit).map { list -> list.map { it.toDomain() } }
+
+    /** Kullanıcının kaydettiği hızlı log şablonları (bkz. LogScreen "Şablonlar / Favoriler"). */
+    fun observeQuickTemplates(): Flow<List<QuickTemplate>> =
+        quickTemplateDao.observeAll().map { list -> list.map { it.toDomain() } }
+
+    /** "Sık tekrarlanan panel" laboratuvar şablonları (bkz. LabScreen "Şablonlar"). */
+    fun observeLabResultTemplates(): Flow<List<LabResultTemplate>> =
+        labResultTemplateDao.observeAll().map { list -> list.map { it.toDomain() } }
 
     /**
      * Son kreatin logundan bu yana geçen gün sayısı — TwinGuardrails'in
@@ -210,6 +250,102 @@ class HealthSyncRepository(
             Unit
         }
 
+    /**
+     * Sık tekrarlanan bir kombinasyonu ("Standart Sabah Kahvesi" vb.) tek
+     * dokunuşla tekrar loglanabilecek bir şablon olarak kaydeder. `logIntake`'in
+     * aksine bir [IntakeRecord] üretmez — LogScreen bu şablonu listeler,
+     * kullanıcı ona dokununca ayrıca `logIntake` çağrılır.
+     */
+    suspend fun addQuickTemplate(kind: IntakeKind, label: String, amount: Double?, unit: String?): Result<Unit> =
+        runCatching {
+            val userId = currentUserId() ?: error("Oturum açık değil")
+            val template = QuickTemplate(userId = userId, kind = kind, label = label, amount = amount, unit = unit)
+            quickTemplateDao.insert(template.toEntity(SyncState.PENDING))
+            pushPendingQuickTemplates()
+            Unit
+        }
+
+    /**
+     * Var olan bir şablonu düzenler — id/createdAt korunur, geri kalan alanlar
+     * değişir. Önceden bir şablon yanlış/eksik eklendiğinde tek yol silip
+     * yeniden eklemekti (createdAt değişir, sıralaması değişir).
+     */
+    suspend fun updateQuickTemplate(
+        original: QuickTemplate,
+        kind: IntakeKind,
+        label: String,
+        amount: Double?,
+        unit: String?
+    ): Result<Unit> = runCatching {
+        val updated = original.copy(kind = kind, label = label, amount = amount, unit = unit)
+        quickTemplateDao.update(updated.toEntity(SyncState.PENDING))
+        pushPendingQuickTemplates()
+        Unit
+    }
+
+    /** Artık kullanılmayan/yanlış girilmiş bir şablonu kaldırır. deleteIntake ile aynı sıra: önce Supabase, sonra yerel. */
+    suspend fun deleteQuickTemplate(id: String): Result<Unit> = runCatching {
+        postgrest.from("quick_template").delete { filter { eq("id", id) } }
+        quickTemplateDao.delete(id)
+        Unit
+    }
+
+    suspend fun pushPendingQuickTemplates() = runCatching {
+        quickTemplateDao.getPending().forEach { entity ->
+            val row = entity.toDomain().toRow()
+            postgrest.from("quick_template").upsert(row, onConflict = "id")
+            quickTemplateDao.markSynced(entity.id)
+        }
+    }
+
+    /** Yeni bir "sık tekrarlanan panel" laboratuvar şablonu kaydeder (bkz. LabResultTemplate). */
+    suspend fun addLabResultTemplate(
+        panel: String,
+        marker: String,
+        unit: String?,
+        refLow: Double?,
+        refHigh: Double?
+    ): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val template = LabResultTemplate(
+            userId = userId, panel = panel, marker = marker,
+            unit = unit, refLow = refLow, refHigh = refHigh
+        )
+        labResultTemplateDao.insert(template.toEntity(SyncState.PENDING))
+        pushPendingLabResultTemplates()
+        Unit
+    }
+
+    suspend fun deleteLabResultTemplate(id: String): Result<Unit> = runCatching {
+        postgrest.from("lab_result_template").delete { filter { eq("id", id) } }
+        labResultTemplateDao.delete(id)
+        Unit
+    }
+
+    suspend fun pushPendingLabResultTemplates() = runCatching {
+        labResultTemplateDao.getPending().forEach { entity ->
+            val row = entity.toDomain().toRow()
+            postgrest.from("lab_result_template").upsert(row, onConflict = "id")
+            labResultTemplateDao.markSynced(entity.id)
+        }
+    }
+
+    /**
+     * Henüz Supabase'e itilmemiş (PENDING) kayıt sayısı — tüm tablolar
+     * toplanır. Önceden bu bilgi hiçbir ekranda gösterilmiyordu; offline
+     * senkron sessizce arka planda çalıştığı için bir sorun olduğunda
+     * (ör. sürekli ağ hatası) kullanıcının fark etmesinin hiçbir yolu yoktu.
+     * Bkz. SettingsScreen "Senkronizasyon durumu".
+     */
+    suspend fun pendingSyncCount(): Int =
+        dailySnapshotDao.getPending().size +
+            intakeRecordDao.getPending().size +
+            labResultDao.getPending().size +
+            clinicalFlagDao.getPending().size +
+            bodyMetricDao.getPending().size +
+            quickTemplateDao.getPending().size +
+            labResultTemplateDao.getPending().size
+
     suspend fun pushPendingBodyMetrics() = runCatching {
         bodyMetricDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
@@ -281,6 +417,8 @@ class HealthSyncRepository(
             runCatching { pushPendingLabResults().getOrThrow() }.exceptionOrNull()?.let { add("lab sonuçları" to it) }
             runCatching { pushPendingClinicalFlags().getOrThrow() }.exceptionOrNull()?.let { add("klinik bayraklar" to it) }
             runCatching { pushPendingBodyMetrics().getOrThrow() }.exceptionOrNull()?.let { add("vücut ölçümleri" to it) }
+            runCatching { pushPendingQuickTemplates().getOrThrow() }.exceptionOrNull()?.let { add("şablonlar" to it) }
+            runCatching { pushPendingLabResultTemplates().getOrThrow() }.exceptionOrNull()?.let { add("lab şablonları" to it) }
             runCatching { pullLabResultsFromRemote().getOrThrow() }.exceptionOrNull()?.let { add("uzak lab çekme" to it) }
         }
         return if (failures.isEmpty()) {
