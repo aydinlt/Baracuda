@@ -96,4 +96,7 @@ interface DailySnapshotDao {
 
     @Query("UPDATE daily_snapshot SET syncState = 'SYNCED' WHERE epochDay = :epochDay")
     suspend fun markSynced(epochDay: Long)
+
+    @Query("DELETE FROM daily_snapshot WHERE epochDay = :epochDay")
+    suspend fun delete(epochDay: Long)
 }

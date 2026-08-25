@@ -190,6 +190,18 @@ class DashboardViewModel @Inject constructor(
     }
 
     /**
+     * Yanlış/yanlış güne düşmüş bir gecelik özeti siler — özellikle elle girilmiş
+     * (SnapshotSource.MANUAL) bir uyku kaydını düzeltmenin tek yolu budur.
+     * Bkz. HealthSyncRepository.deleteDailySnapshot.
+     */
+    fun deleteDailySnapshot(epochDay: Long) {
+        viewModelScope.launch {
+            val result = repository.deleteDailySnapshot(epochDay)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
+    }
+
+    /**
      * Health Connect'te bu gece için kayıt yoksa (cihaz takılmadı, izin yok,
      * senkronizasyon henüz çalışmadı) kullanıcı uyku süresini elle girebilir
      * — önceden "Bu gece" kartı bu durumda süresiz "Veri yok" kalıyordu.
@@ -451,12 +463,18 @@ fun DashboardScreen(
             item { Text("Son 7 gün", style = MaterialTheme.typography.titleMedium) }
             items(ui.recent) { snap ->
                 Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(snap.date.toString())
-                        Text(
-                            "Uyku ${snap.asleepMin?.let { "${it / 60}s ${it % 60}d" } ?: "—"} " +
-                                "· Verim ${snap.efficiencyPct?.let { "%$it" } ?: "—"}"
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(snap.date.toString())
+                            Text(
+                                "Uyku ${snap.asleepMin?.let { "${it / 60}s ${it % 60}d" } ?: "—"} " +
+                                    "· Verim ${snap.efficiencyPct?.let { "%$it" } ?: "—"}"
+                            )
+                        }
+                        TextButton(onClick = { viewModel.deleteDailySnapshot(snap.date.toEpochDay()) }) { Text("Sil") }
                     }
                 }
             }
