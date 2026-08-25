@@ -91,7 +91,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun save(waterTargetMl: Int, proteinMinG: Int, proteinMaxG: Int, wakeTarget: LocalTime, stepsTarget: Int) {
+    fun save(
+        waterTargetMl: Int,
+        proteinMinG: Int,
+        proteinMaxG: Int,
+        wakeTarget: LocalTime,
+        stepsTarget: Int,
+        bedEarliest: LocalTime
+    ) {
         val current = _ui.value.profile ?: return
         viewModelScope.launch {
             _ui.update { it.copy(isSaving = true, saved = false, error = null) }
@@ -101,7 +108,8 @@ class SettingsViewModel @Inject constructor(
                     proteinTargetMinG = proteinMinG,
                     proteinTargetMaxG = proteinMaxG,
                     wakeTarget = wakeTarget,
-                    stepsTarget = stepsTarget
+                    stepsTarget = stepsTarget,
+                    bedEarliest = bedEarliest
                 )
             )
             _ui.update {
@@ -130,6 +138,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     var proteinMax by remember { mutableStateOf("") }
     var wakeTarget by remember { mutableStateOf("") }
     var stepsTarget by remember { mutableStateOf("") }
+    var bedEarliest by remember { mutableStateOf("") }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
 
     // Profil ilk kez yüklendiğinde form alanlarını doldur; sonraki güncellemelerde
@@ -141,6 +150,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             proteinMax = p.proteinTargetMaxG.toString()
             wakeTarget = p.wakeTarget.format(timeFormatter)
             stepsTarget = p.stepsTarget.toString()
+            bedEarliest = p.bedEarliest.format(timeFormatter)
         }
     }
 
@@ -197,6 +207,17 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
+            OutlinedTextField(
+                value = bedEarliest,
+                onValueChange = { bedEarliest = it },
+                label = { Text("En erken yatış (SS:dd, ör. 23:00)") },
+                // Önceden Profile.bedEarliest hiçbir ekranda düzenlenemiyordu — su/protein/
+                // kalkış/adım gibi Ayarlar'a bağlanmamıştı, TwinGuardrails sabit 23:00
+                // kullanmak zorundaydı (bkz. TwinGuardrails.kt EARLIEST_BED yorumu, Hafta 17).
+                // Kafein kesme saati, glisin hatırlatması, antrenman/sauna-yatış aralığı ve
+                // son öğün kuralları hep bu değere göre hesaplanıyor.
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // Önceden bu buton alan içerikleri geçersizken bile her zaman aktifti —
             // tıklamak return@Button'a düşüp sessizce hiçbir şey yapmıyordu, LabScreen'in
@@ -206,6 +227,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             // su/protein ilerleme çubuklarında (miktar / hedef) sıfıra bölme/NaN'a
             // yol açabilirdi. Artık hedeflerin pozitif olması da şart.
             val wakeValid = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.isSuccess
+            val bedEarliestValid = runCatching { LocalTime.parse(bedEarliest, timeFormatter) }.isSuccess
             val waterValid = (waterTarget.toIntOrNull() ?: 0) > 0
             val proteinMinValid = (proteinMin.toIntOrNull() ?: 0) > 0
             val proteinMaxValid = (proteinMax.toIntOrNull() ?: 0) > 0
@@ -224,10 +246,12 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     val pMax = proteinMax.toIntOrNull()?.takeIf { it > 0 && it >= pMin } ?: return@Button
                     val wake = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.getOrNull() ?: return@Button
                     val steps = stepsTarget.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
-                    viewModel.save(w, pMin, pMax, wake, steps)
+                    val bed = runCatching { LocalTime.parse(bedEarliest, timeFormatter) }.getOrNull() ?: return@Button
+                    viewModel.save(w, pMin, pMax, wake, steps, bed)
                 },
                 enabled = !ui.isSaving && ui.profile != null &&
-                    waterValid && proteinMinValid && proteinMaxValid && proteinRangeValid && wakeValid && stepsValid,
+                    waterValid && proteinMinValid && proteinMaxValid && proteinRangeValid &&
+                    wakeValid && stepsValid && bedEarliestValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (ui.isSaving) "Kaydediliyor..." else "Kaydet")
