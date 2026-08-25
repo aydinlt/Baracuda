@@ -51,4 +51,7 @@ interface BodyMetricDao {
 
     @Query("UPDATE body_metric SET syncState = 'SYNCED' WHERE epochDay = :epochDay")
     suspend fun markSynced(epochDay: Long)
+
+    @Query("DELETE FROM body_metric WHERE epochDay = :epochDay")
+    suspend fun delete(epochDay: Long)
 }
