@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Update
 import com.aydin.biyohack.data.LabResultTemplate
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -40,6 +41,10 @@ fun LabResultTemplateEntity.toDomain() = LabResultTemplate(
 interface LabResultTemplateDao {
     @Insert
     suspend fun insert(entity: LabResultTemplateEntity)
+
+    /** id sabit kalır (PK) — panel/marker/unit/refLow/refHigh/syncState güncellenir. */
+    @Update
+    suspend fun update(entity: LabResultTemplateEntity)
 
     @Query("SELECT * FROM lab_result_template ORDER BY panel, marker")
     fun observeAll(): Flow<List<LabResultTemplateEntity>>
