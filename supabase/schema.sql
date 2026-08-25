@@ -239,3 +239,28 @@ create policy "quick_template_owner_all" on public.quick_template
 
 create index if not exists idx_quick_template_user_created
     on public.quick_template (user_id, created_at desc);
+
+-- ────────────────────────────────────────────────────────────
+-- 9) lab_result_template — "sık tekrarlanan panel" şablonu (Hafta 42).
+--    quick_template'in laboratuvar karşılığı: değer/tarih taşımaz, yalnızca
+--    panel+marker+birim+referans aralığını sabitler; LabScreen'de dokunulduğunda
+--    "sonuç ekle" diyaloğunu bu alanlarla önceden doldurulmuş açar.
+-- ────────────────────────────────────────────────────────────
+create table if not exists public.lab_result_template (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references auth.users(id) on delete cascade,
+    panel       text not null,
+    marker      text not null,
+    unit        text,
+    ref_low     numeric,
+    ref_high    numeric,
+    created_at  timestamptz not null default now()
+);
+
+alter table public.lab_result_template enable row level security;
+
+create policy "lab_result_template_owner_all" on public.lab_result_template
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists idx_lab_result_template_user_panel
+    on public.lab_result_template (user_id, panel, marker);

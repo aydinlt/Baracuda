@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Update
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.QuickTemplate
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,10 @@ fun QuickTemplateEntity.toDomain() = QuickTemplate(
 interface QuickTemplateDao {
     @Insert
     suspend fun insert(entity: QuickTemplateEntity)
+
+    /** id sabit kalır (PK) — kind/label/amount/unit/syncState güncellenir. */
+    @Update
+    suspend fun update(entity: QuickTemplateEntity)
 
     /** En yeni eklenen şablon en üstte — kullanıcı az sayıda tutması beklenen, elle kürate edilen bir liste. */
     @Query("SELECT * FROM quick_template ORDER BY createdAt DESC")

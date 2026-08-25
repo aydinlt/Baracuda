@@ -68,3 +68,21 @@ data class QuickTemplate(
     val unit: String? = null,
     val createdAt: Instant = Instant.now()
 )
+
+/**
+ * "Sık tekrarlanan panel" şablonu — [QuickTemplate]'in laboratuvar karşılığı.
+ * Değer/tarih taşımaz (her tahlilde değişir), yalnızca panel+marker+birim+
+ * referans aralığını sabitler. LabScreen'de dokunulduğunda "sonuç ekle"
+ * diyaloğunu bu alanlarla önceden doldurulmuş açar — kullanıcı yalnızca
+ * değeri ve tarihi girer.
+ */
+data class LabResultTemplate(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String,
+    val panel: String,
+    val marker: String,
+    val unit: String? = null,
+    val refLow: Double? = null,
+    val refHigh: Double? = null,
+    val createdAt: Instant = Instant.now()
+)

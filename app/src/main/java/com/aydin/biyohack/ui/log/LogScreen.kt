@@ -31,6 +31,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.IntakeKind
+import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.QuickTemplate
 import com.aydin.biyohack.data.repository.AuthRepository
 import com.aydin.biyohack.data.repository.HealthSyncRepository
@@ -49,7 +50,8 @@ data class LogUiState(
     val proteinTargetMinG: Int = 140,
     val proteinTargetMaxG: Int = 170,
     val creatineFreeDays: Int = 0,
-    val templates: List<QuickTemplate> = emptyList()
+    val templates: List<QuickTemplate> = emptyList(),
+    val todayIntake: List<IntakeRecord> = emptyList()
 )
 
 @HiltViewModel
@@ -82,6 +84,14 @@ class LogViewModel @Inject constructor(
         viewModelScope.launch {
             repository.observeQuickTemplates().collect { list ->
                 _ui.update { it.copy(templates = list) }
+            }
+        }
+        // "Bugünkü loglar" mini listesi — önceden bunu görmenin tek yolu Dashboard'a
+        // gitmekti; LogScreen'de tek dokunuşla yanlış girilen bir logu düzeltebilmek
+        // için (silme) buraya da eklendi.
+        viewModelScope.launch {
+            repository.observeTodayIntake().collect { list ->
+                _ui.update { it.copy(todayIntake = list) }
             }
         }
     }
@@ -118,9 +128,24 @@ class LogViewModel @Inject constructor(
         }
     }
 
+    fun updateTemplate(original: QuickTemplate, kind: IntakeKind, label: String, amount: Double?, unit: String?) {
+        viewModelScope.launch {
+            val result = repository.updateQuickTemplate(original, kind, label, amount, unit)
+            result.exceptionOrNull()?.let { e -> _ui.update { it.copy(error = e.message) } }
+        }
+    }
+
     fun deleteTemplate(id: String) {
         viewModelScope.launch {
             val result = repository.deleteQuickTemplate(id)
+            result.exceptionOrNull()?.let { e -> _ui.update { it.copy(error = e.message) } }
+        }
+    }
+
+    /** Yanlış dokunulmuş bir bugünkü logu siler — DashboardScreen'deki aynı işlevin LogScreen karşılığı. */
+    fun deleteIntakeEntry(id: String) {
+        viewModelScope.launch {
+            val result = repository.deleteIntake(id)
             result.exceptionOrNull()?.let { e -> _ui.update { it.copy(error = e.message) } }
         }
     }
@@ -155,6 +180,7 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showMealDialog by remember { mutableStateOf(false) }
     var showTemplateDialog by remember { mutableStateOf(false) }
+    var editingTemplate by remember { mutableStateOf<QuickTemplate?>(null) }
 
     Scaffold(
         topBar = {
@@ -195,12 +221,19 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
                             ) {
                                 Text(template.label + (template.amount?.let { " (${it.toInt()}${template.unit ?: ""})" } ?: ""))
                             }
+                            TextButton(onClick = {
+                                editingTemplate = template
+                                showTemplateDialog = true
+                            }) { Text("Düzenle") }
                             TextButton(onClick = { viewModel.deleteTemplate(template.id) }) { Text("Sil") }
                         }
                     }
                 }
                 OutlinedButton(
-                    onClick = { showTemplateDialog = true },
+                    onClick = {
+                        editingTemplate = null
+                        showTemplateDialog = true
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("+ Şablon ekle") }
             }
@@ -257,6 +290,26 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
                     }
                 }
             }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Bugünkü loglar", style = MaterialTheme.typography.titleMedium)
+                if (ui.todayIntake.isEmpty()) {
+                    Text("Bugün henüz log yok.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    ui.todayIntake.sortedByDescending { it.ts }.forEach { entry ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                entry.label + (entry.amount?.let { " (${it.toInt()}${entry.unit ?: ""})" } ?: ""),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            TextButton(onClick = { viewModel.deleteIntakeEntry(entry.id) }) { Text("Sil") }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -272,10 +325,20 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
 
     if (showTemplateDialog) {
         AddTemplateDialog(
-            onDismiss = { showTemplateDialog = false },
-            onConfirm = { kind, label, amount, unit ->
-                viewModel.saveTemplate(kind, label, amount, unit)
+            initial = editingTemplate,
+            onDismiss = {
                 showTemplateDialog = false
+                editingTemplate = null
+            },
+            onConfirm = { kind, label, amount, unit ->
+                val current = editingTemplate
+                if (current != null) {
+                    viewModel.updateTemplate(current, kind, label, amount, unit)
+                } else {
+                    viewModel.saveTemplate(kind, label, amount, unit)
+                }
+                showTemplateDialog = false
+                editingTemplate = null
             }
         )
     }
@@ -288,19 +351,34 @@ private fun IntakeKind.label() = when (this) {
     IntakeKind.SUPPLEMENT -> "Takviye"
 }
 
+/** protein şablonu = MEAL kind + tam olarak bu birim (bkz. DashboardScreen/MiddayReminderWorker'ın proteinG hesabı). */
+private const val PROTEIN_UNIT = "g protein"
+
 @Composable
 private fun AddTemplateDialog(
+    initial: QuickTemplate?,
     onDismiss: () -> Unit,
     onConfirm: (IntakeKind, String, Double?, String?) -> Unit
 ) {
-    var kind by remember { mutableStateOf(IntakeKind.MEAL) }
-    var label by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("") }
+    var kind by remember { mutableStateOf(initial?.kind ?: IntakeKind.MEAL) }
+    var label by remember { mutableStateOf(initial?.label ?: "") }
+    // MEAL için: amount/unit genel alanlar yerine tek bir "protein (g)" alanı —
+    // önceden kullanıcı unit'i elle "g protein" yazmak zorundaydı (kolayca
+    // unutulan, sessizce Dashboard'daki protein ilerlemesine hiç katkı yapmayan
+    // bir sihirli string), artık MEAL şablonları otomatik doğru unit'i taşıyor.
+    var protein by remember {
+        mutableStateOf(if (initial?.kind == IntakeKind.MEAL) initial.amount?.toInt()?.toString() ?: "" else "")
+    }
+    var amount by remember {
+        mutableStateOf(if (initial != null && initial.kind != IntakeKind.MEAL) initial.amount?.toString() ?: "" else "")
+    }
+    var unit by remember {
+        mutableStateOf(if (initial != null && initial.kind != IntakeKind.MEAL) initial.unit ?: "" else "")
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Şablon ekle") },
+        title = { Text(if (initial != null) "Şablonu düzenle" else "Şablon ekle") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -317,23 +395,38 @@ private fun AddTemplateDialog(
                     onValueChange = { label = it },
                     label = { Text("Ad (ör. Standart Sabah Kahvesi)") }
                 )
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { amount = it },
-                    label = { Text("Miktar (opsiyonel, ör. 500)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                OutlinedTextField(
-                    value = unit,
-                    onValueChange = { unit = it },
-                    label = { Text("Birim (opsiyonel, ör. ml, g)") }
-                )
+                if (kind == IntakeKind.MEAL) {
+                    OutlinedTextField(
+                        value = protein,
+                        onValueChange = { protein = it },
+                        label = { Text("Protein (g, opsiyonel)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = { amount = it },
+                        label = { Text("Miktar (opsiyonel, ör. 500)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = unit,
+                        onValueChange = { unit = it },
+                        label = { Text("Birim (opsiyonel, ör. ml, g)") }
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onConfirm(kind, label.trim(), amount.toDoubleOrNull(), unit.trim().ifBlank { null })
+                    val (finalAmount, finalUnit) = if (kind == IntakeKind.MEAL) {
+                        val p = protein.toDoubleOrNull()
+                        p to (if (p != null) PROTEIN_UNIT else null)
+                    } else {
+                        amount.toDoubleOrNull() to unit.trim().ifBlank { null }
+                    }
+                    onConfirm(kind, label.trim(), finalAmount, finalUnit)
                 },
                 enabled = label.isNotBlank()
             ) { Text("Kaydet") }

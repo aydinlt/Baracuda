@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.Profile
 import com.aydin.biyohack.data.repository.AuthRepository
+import com.aydin.biyohack.data.repository.HealthSyncRepository
 import com.aydin.biyohack.data.repository.ProfileRepository
 import com.aydin.biyohack.sync.TwinMorningWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,13 +48,17 @@ data class SettingsUiState(
     val profile: Profile? = null,
     val isSaving: Boolean = false,
     val saved: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // null = henüz kontrol edilmedi (ilk açılışta bir kez hesaplanır) — 0'dan ayrı
+    // tutulur ki "her şey senkron" ile "henüz bakılmadı" karışmasın.
+    val pendingSyncCount: Int? = null
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val authRepository: AuthRepository,
+    private val healthSyncRepository: HealthSyncRepository,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -68,6 +73,21 @@ class SettingsViewModel @Inject constructor(
                     if (profile != null) _ui.update { it.copy(profile = profile) }
                 }
             }
+        }
+        refreshPendingSyncCount()
+    }
+
+    /**
+     * Henüz Supabase'e itilmemiş kayıt sayısını yeniler (bkz. HealthSyncRepository.
+     * pendingSyncCount). Bu bir Flow değil, tek seferlik bir sorgu — "canlı" bir
+     * sayaç yerine ekrana her girişte ve "Yenile"ye basınca güncellenen bir
+     * durum göstergesi olarak yeterli; sürekli gözlemlemek gereksiz karmaşıklık
+     * katardı (senkron zaten arka planda kendiliğinden çalışıyor).
+     */
+    fun refreshPendingSyncCount() {
+        viewModelScope.launch {
+            val count = healthSyncRepository.pendingSyncCount()
+            _ui.update { it.copy(pendingSyncCount = count) }
         }
     }
 
@@ -90,6 +110,7 @@ class SettingsViewModel @Inject constructor(
             // yeni kalkış hedefine göre hemen yeniden zamanlar (bkz. TwinMorningWorker.kt).
             if (result.isSuccess) {
                 TwinMorningWorker.scheduleNext(appContext, wakeTarget.plusMinutes(30))
+                refreshPendingSyncCount()
             }
         }
     }
@@ -195,6 +216,22 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
 
             OutlinedButton(onClick = viewModel::signOut, modifier = Modifier.fillMaxWidth()) {
                 Text("Çıkış Yap")
+            }
+
+            Text("Senkronizasyon", style = MaterialTheme.typography.titleMedium)
+            // Önceden offline kuyruk (PENDING kayıtlar) tamamen görünmezdi — arka planda
+            // sessizce çalıştığı için sürekli bir ağ hatası olsa bile kullanıcının fark
+            // etmesinin hiçbir yolu yoktu (bkz. HealthSyncRepository.pendingSyncCount).
+            Text(
+                when (val count = ui.pendingSyncCount) {
+                    null -> "Kontrol ediliyor..."
+                    0 -> "Her şey senkronize edildi."
+                    else -> "$count kayıt senkronize edilmeyi bekliyor."
+                },
+                style = MaterialTheme.typography.bodySmall
+            )
+            OutlinedButton(onClick = viewModel::refreshPendingSyncCount, modifier = Modifier.fillMaxWidth()) {
+                Text("Yenile")
             }
         }
     }

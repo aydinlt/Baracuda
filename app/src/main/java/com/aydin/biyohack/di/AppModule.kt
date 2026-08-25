@@ -10,6 +10,7 @@ import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
 import com.aydin.biyohack.data.local.IntakeRecordDao
 import com.aydin.biyohack.data.local.LabResultDao
+import com.aydin.biyohack.data.local.LabResultTemplateDao
 import com.aydin.biyohack.data.local.ProfileDao
 import com.aydin.biyohack.data.local.QuickTemplateDao
 import com.aydin.biyohack.data.remote.createBiyohackSupabaseClient
@@ -51,6 +52,7 @@ object AppModule {
     @Provides fun provideProfileDao(db: AppDatabase): ProfileDao = db.profileDao()
     @Provides fun provideBodyMetricDao(db: AppDatabase): BodyMetricDao = db.bodyMetricDao()
     @Provides fun provideQuickTemplateDao(db: AppDatabase): QuickTemplateDao = db.quickTemplateDao()
+    @Provides fun provideLabResultTemplateDao(db: AppDatabase): LabResultTemplateDao = db.labResultTemplateDao()
 
     @Provides
     @Singleton
@@ -76,6 +78,7 @@ object AppModule {
         clinicalFlagDao: ClinicalFlagDao,
         bodyMetricDao: BodyMetricDao,
         quickTemplateDao: QuickTemplateDao,
+        labResultTemplateDao: LabResultTemplateDao,
         postgrest: Postgrest,
         auth: Auth,
         healthDataSource: HealthDataSource
@@ -86,6 +89,7 @@ object AppModule {
         clinicalFlagDao = clinicalFlagDao,
         bodyMetricDao = bodyMetricDao,
         quickTemplateDao = quickTemplateDao,
+        labResultTemplateDao = labResultTemplateDao,
         postgrest = postgrest,
         healthDataSource = healthDataSource,
         currentUserId = { auth.currentUserOrNull()?.id }

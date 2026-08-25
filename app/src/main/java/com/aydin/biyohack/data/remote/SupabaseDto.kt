@@ -6,6 +6,7 @@ import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.LabResultTemplate
 import com.aydin.biyohack.data.Profile
 import com.aydin.biyohack.data.QuickTemplate
 import com.aydin.biyohack.data.SnapshotSource
@@ -195,4 +196,26 @@ fun QuickTemplate.toRow() = QuickTemplateRow(
 fun QuickTemplateRow.toDomain() = QuickTemplate(
     id = id, userId = userId, kind = IntakeKind.valueOf(kind), label = label,
     amount = amount, unit = unit, createdAt = java.time.Instant.parse(createdAt)
+)
+
+@Serializable
+data class LabResultTemplateRow(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    val panel: String,
+    val marker: String,
+    val unit: String? = null,
+    @SerialName("ref_low") val refLow: Double? = null,
+    @SerialName("ref_high") val refHigh: Double? = null,
+    @SerialName("created_at") val createdAt: String
+)
+
+fun LabResultTemplate.toRow() = LabResultTemplateRow(
+    id = id, userId = userId, panel = panel, marker = marker, unit = unit,
+    refLow = refLow, refHigh = refHigh, createdAt = createdAt.toString()
+)
+
+fun LabResultTemplateRow.toDomain() = LabResultTemplate(
+    id = id, userId = userId, panel = panel, marker = marker, unit = unit,
+    refLow = refLow, refHigh = refHigh, createdAt = java.time.Instant.parse(createdAt)
 )
