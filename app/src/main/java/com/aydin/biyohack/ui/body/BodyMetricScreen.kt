@@ -2,6 +2,7 @@ package com.aydin.biyohack.ui.body
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -67,6 +68,20 @@ class BodyMetricViewModel @Inject constructor(
             _ui.update { it.copy(isSaving = false, error = result.exceptionOrNull()?.message) }
         }
     }
+
+    /**
+     * Yanlış girilmiş/yanlış güne düşmüş bir ölçümü siler. Önceden bunun hiçbir
+     * yolu yoktu — `log` yalnızca AYNI GÜN tekrar girilirse üzerine yazıyordu
+     * (upsert, epochDay PK); geçmiş bir güne yanlış girilen bir kilo/bel
+     * ölçümü kalıcı olarak orada kalırdı. LogScreen/LabScreen'deki "Sil"
+     * ile aynı desen (bkz. HealthSyncRepository.deleteBodyMetric).
+     */
+    fun deleteMetric(epochDay: Long) {
+        viewModelScope.launch {
+            val result = repository.deleteBodyMetric(epochDay)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
+    }
 }
 
 @Composable
@@ -127,30 +142,36 @@ fun BodyMetricScreen(onBack: () -> Unit, viewModel: BodyMetricViewModel = hiltVi
                 itemsIndexed(ui.recent) { index, metric ->
                     val previous = ui.recent.getOrNull(index + 1)
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(metric.date.toString(), style = MaterialTheme.typography.bodySmall)
-                            Text(
-                                listOfNotNull(
-                                    metric.weightKg?.let { "%.1f kg".format(it) },
-                                    metric.waistCm?.let { "%.1f cm bel".format(it) }
-                                ).joinToString(" · ")
-                            )
-                            previous?.let { p ->
-                                val weightDelta = if (metric.weightKg != null && p.weightKg != null)
-                                    metric.weightKg - p.weightKg else null
-                                val waistDelta = if (metric.waistCm != null && p.waistCm != null)
-                                    metric.waistCm - p.waistCm else null
-                                val deltaParts = listOfNotNull(
-                                    weightDelta?.let { "${if (it >= 0) "+" else ""}${"%.1f".format(it)} kg" },
-                                    waistDelta?.let { "${if (it >= 0) "+" else ""}${"%.1f".format(it)} cm" }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(metric.date.toString(), style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    listOfNotNull(
+                                        metric.weightKg?.let { "%.1f kg".format(it) },
+                                        metric.waistCm?.let { "%.1f cm bel".format(it) }
+                                    ).joinToString(" · ")
                                 )
-                                if (deltaParts.isNotEmpty()) {
-                                    Text(
-                                        "${deltaParts.joinToString(" · ")} (önceki: ${p.date})",
-                                        style = MaterialTheme.typography.labelSmall
+                                previous?.let { p ->
+                                    val weightDelta = if (metric.weightKg != null && p.weightKg != null)
+                                        metric.weightKg - p.weightKg else null
+                                    val waistDelta = if (metric.waistCm != null && p.waistCm != null)
+                                        metric.waistCm - p.waistCm else null
+                                    val deltaParts = listOfNotNull(
+                                        weightDelta?.let { "${if (it >= 0) "+" else ""}${"%.1f".format(it)} kg" },
+                                        waistDelta?.let { "${if (it >= 0) "+" else ""}${"%.1f".format(it)} cm" }
                                     )
+                                    if (deltaParts.isNotEmpty()) {
+                                        Text(
+                                            "${deltaParts.joinToString(" · ")} (önceki: ${p.date})",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    }
                                 }
                             }
+                            TextButton(onClick = { viewModel.deleteMetric(metric.date.toEpochDay()) }) { Text("Sil") }
                         }
                     }
                 }

@@ -346,6 +346,32 @@ class HealthSyncRepository(
             quickTemplateDao.getPending().size +
             labResultTemplateDao.getPending().size
 
+    /**
+     * Yanlış girilmiş/yanlış güne düşmüş bir kilo-bel çevresi ölçümünü siler.
+     * Önceden bunun hiçbir yolu yoktu — `logBodyMetric` yalnızca AYNI GÜN
+     * içinde tekrar girilirse üzerine yazıyordu (upsert, epochDay PK); geçmiş
+     * bir güne yanlış girilen bir ölçüm kalıcı olarak orada kalırdı. Diğer
+     * tüm log tipleri (intake, lab_result, quick_template, lab_result_template)
+     * için zaten bir "Sil" yolu vardı, body_metric bu desende dışarıda
+     * kalmıştı. deleteLabResult ile aynı sıra: önce Supabase, sonra yerel.
+     *
+     * BodyMetricRow'da `id` taşınmıyor (bkz. SupabaseDto.kt) — upsert
+     * `onConflict = "user_id,date"` kullanıyor, silme de aynı doğal anahtarla
+     * (user_id + date) filtrelenir.
+     */
+    suspend fun deleteBodyMetric(epochDay: Long): Result<Unit> = runCatching {
+        val userId = currentUserId() ?: error("Oturum açık değil")
+        val date = LocalDate.ofEpochDay(epochDay)
+        postgrest.from("body_metric").delete {
+            filter {
+                eq("user_id", userId)
+                eq("date", date.toString())
+            }
+        }
+        bodyMetricDao.delete(epochDay)
+        Unit
+    }
+
     suspend fun pushPendingBodyMetrics() = runCatching {
         bodyMetricDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
