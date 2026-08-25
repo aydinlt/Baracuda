@@ -49,3 +49,22 @@ data class ClinicalFlagRecord(
     val raisedAt: Instant = Instant.now(),
     val resolved: Boolean = false
 )
+
+/**
+ * Kullanıcının kendi tanımladığı hızlı log şablonu ("Standart Sabah Kahvesi",
+ * "Klasik Akşam Yemeği" vb.) — [IntakeRecord] ile aynı alanları taşır ama
+ * kendisi bir log değildir, LogScreen'de tek dokunuşla yeni bir [IntakeRecord]
+ * üretmek için kullanılan bir "kalıp"tır. Önceden LogScreen'de yalnızca sabit,
+ * kod içine gömülü hazır butonlar (su/kahve/takviye presetleri) vardı —
+ * kullanıcının kendi sık tükettiği kombinasyonları (ör. belirli bir öğün)
+ * kaydedebileceği hiçbir yer yoktu.
+ */
+data class QuickTemplate(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String,
+    val kind: IntakeKind,
+    val label: String,
+    val amount: Double? = null,
+    val unit: String? = null,
+    val createdAt: Instant = Instant.now()
+)

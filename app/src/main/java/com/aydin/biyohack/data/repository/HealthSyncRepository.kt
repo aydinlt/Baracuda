@@ -6,12 +6,14 @@ import com.aydin.biyohack.data.DailySnapshot
 import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
+import com.aydin.biyohack.data.QuickTemplate
 import com.aydin.biyohack.data.SnapshotSource
 import com.aydin.biyohack.data.local.BodyMetricDao
 import com.aydin.biyohack.data.local.ClinicalFlagDao
 import com.aydin.biyohack.data.local.DailySnapshotDao
 import com.aydin.biyohack.data.local.IntakeRecordDao
 import com.aydin.biyohack.data.local.LabResultDao
+import com.aydin.biyohack.data.local.QuickTemplateDao
 import com.aydin.biyohack.data.local.SyncState
 import com.aydin.biyohack.data.local.toDomain
 import com.aydin.biyohack.data.local.toEntity
@@ -43,6 +45,7 @@ class HealthSyncRepository(
     private val labResultDao: LabResultDao,
     private val clinicalFlagDao: ClinicalFlagDao,
     private val bodyMetricDao: BodyMetricDao,
+    private val quickTemplateDao: QuickTemplateDao,
     private val postgrest: Postgrest,
     private val healthDataSource: HealthDataSource,
     private val currentUserId: suspend () -> String?
@@ -87,6 +90,10 @@ class HealthSyncRepository(
 
     fun observeRecentBodyMetrics(limit: Int = 30): Flow<List<BodyMetric>> =
         bodyMetricDao.observeRecent(limit).map { list -> list.map { it.toDomain() } }
+
+    /** Kullanıcının kaydettiği hızlı log şablonları (bkz. LogScreen "Şablonlar / Favoriler"). */
+    fun observeQuickTemplates(): Flow<List<QuickTemplate>> =
+        quickTemplateDao.observeAll().map { list -> list.map { it.toDomain() } }
 
     /**
      * Son kreatin logundan bu yana geçen gün sayısı — TwinGuardrails'in
@@ -236,6 +243,36 @@ class HealthSyncRepository(
             Unit
         }
 
+    /**
+     * Sık tekrarlanan bir kombinasyonu ("Standart Sabah Kahvesi" vb.) tek
+     * dokunuşla tekrar loglanabilecek bir şablon olarak kaydeder. `logIntake`'in
+     * aksine bir [IntakeRecord] üretmez — LogScreen bu şablonu listeler,
+     * kullanıcı ona dokununca ayrıca `logIntake` çağrılır.
+     */
+    suspend fun addQuickTemplate(kind: IntakeKind, label: String, amount: Double?, unit: String?): Result<Unit> =
+        runCatching {
+            val userId = currentUserId() ?: error("Oturum açık değil")
+            val template = QuickTemplate(userId = userId, kind = kind, label = label, amount = amount, unit = unit)
+            quickTemplateDao.insert(template.toEntity(SyncState.PENDING))
+            pushPendingQuickTemplates()
+            Unit
+        }
+
+    /** Artık kullanılmayan/yanlış girilmiş bir şablonu kaldırır. deleteIntake ile aynı sıra: önce Supabase, sonra yerel. */
+    suspend fun deleteQuickTemplate(id: String): Result<Unit> = runCatching {
+        postgrest.from("quick_template").delete { filter { eq("id", id) } }
+        quickTemplateDao.delete(id)
+        Unit
+    }
+
+    suspend fun pushPendingQuickTemplates() = runCatching {
+        quickTemplateDao.getPending().forEach { entity ->
+            val row = entity.toDomain().toRow()
+            postgrest.from("quick_template").upsert(row, onConflict = "id")
+            quickTemplateDao.markSynced(entity.id)
+        }
+    }
+
     suspend fun pushPendingBodyMetrics() = runCatching {
         bodyMetricDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
@@ -307,6 +344,7 @@ class HealthSyncRepository(
             runCatching { pushPendingLabResults().getOrThrow() }.exceptionOrNull()?.let { add("lab sonuçları" to it) }
             runCatching { pushPendingClinicalFlags().getOrThrow() }.exceptionOrNull()?.let { add("klinik bayraklar" to it) }
             runCatching { pushPendingBodyMetrics().getOrThrow() }.exceptionOrNull()?.let { add("vücut ölçümleri" to it) }
+            runCatching { pushPendingQuickTemplates().getOrThrow() }.exceptionOrNull()?.let { add("şablonlar" to it) }
             runCatching { pullLabResultsFromRemote().getOrThrow() }.exceptionOrNull()?.let { add("uzak lab çekme" to it) }
         }
         return if (failures.isEmpty()) {

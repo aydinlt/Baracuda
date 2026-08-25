@@ -7,6 +7,7 @@ import com.aydin.biyohack.data.IntakeKind
 import com.aydin.biyohack.data.IntakeRecord
 import com.aydin.biyohack.data.LabResult
 import com.aydin.biyohack.data.Profile
+import com.aydin.biyohack.data.QuickTemplate
 import com.aydin.biyohack.data.SnapshotSource
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -173,4 +174,25 @@ fun BodyMetric.toRow() = BodyMetricRow(
 
 fun BodyMetricRow.toDomain() = BodyMetric(
     userId = userId, date = LocalDate.parse(date), weightKg = weightKg, waistCm = waistCm, notes = notes
+)
+
+@Serializable
+data class QuickTemplateRow(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    val kind: String,
+    val label: String,
+    val amount: Double? = null,
+    val unit: String? = null,
+    @SerialName("created_at") val createdAt: String
+)
+
+fun QuickTemplate.toRow() = QuickTemplateRow(
+    id = id, userId = userId, kind = kind.name, label = label,
+    amount = amount, unit = unit, createdAt = createdAt.toString()
+)
+
+fun QuickTemplateRow.toDomain() = QuickTemplate(
+    id = id, userId = userId, kind = IntakeKind.valueOf(kind), label = label,
+    amount = amount, unit = unit, createdAt = java.time.Instant.parse(createdAt)
 )

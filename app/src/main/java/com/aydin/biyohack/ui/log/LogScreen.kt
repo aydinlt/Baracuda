@@ -31,6 +31,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.aydin.biyohack.data.IntakeKind
+import com.aydin.biyohack.data.QuickTemplate
 import com.aydin.biyohack.data.repository.AuthRepository
 import com.aydin.biyohack.data.repository.HealthSyncRepository
 import com.aydin.biyohack.data.repository.ProfileRepository
@@ -47,7 +48,8 @@ data class LogUiState(
     val error: String? = null,
     val proteinTargetMinG: Int = 140,
     val proteinTargetMaxG: Int = 170,
-    val creatineFreeDays: Int = 0
+    val creatineFreeDays: Int = 0,
+    val templates: List<QuickTemplate> = emptyList()
 )
 
 @HiltViewModel
@@ -77,6 +79,11 @@ class LogViewModel @Inject constructor(
         // ekranda gösterilmiyordu — kullanıcı kreatinsiz gün sayacını yalnızca İkiz'e
         // sorup Cistatin C testi bekliyorsa şans eseri görebiliyordu.
         refreshCreatineFreeDays()
+        viewModelScope.launch {
+            repository.observeQuickTemplates().collect { list ->
+                _ui.update { it.copy(templates = list) }
+            }
+        }
     }
 
     private fun refreshCreatineFreeDays() {
@@ -98,6 +105,23 @@ class LogViewModel @Inject constructor(
             // Kreatin loglandıysa sayaç sıfırlanır — creatineFreeDays son kreatin
             // logundan bu yana geçen gün sayısıdır (bkz. HealthSyncRepository).
             if (result.isSuccess) refreshCreatineFreeDays()
+        }
+    }
+
+    /** Kayıtlı bir şablona tek dokunuşla log oluşturur — [log] ile aynı yolu kullanır. */
+    fun logTemplate(template: QuickTemplate) = log(template.kind, template.label, template.amount, template.unit)
+
+    fun saveTemplate(kind: IntakeKind, label: String, amount: Double?, unit: String?) {
+        viewModelScope.launch {
+            val result = repository.addQuickTemplate(kind, label, amount, unit)
+            result.exceptionOrNull()?.let { e -> _ui.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun deleteTemplate(id: String) {
+        viewModelScope.launch {
+            val result = repository.deleteQuickTemplate(id)
+            result.exceptionOrNull()?.let { e -> _ui.update { it.copy(error = e.message) } }
         }
     }
 }
@@ -130,6 +154,7 @@ private val SUPPLEMENT_PRESETS = listOf(
 fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showMealDialog by remember { mutableStateOf(false) }
+    var showTemplateDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -149,6 +174,36 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
         ) {
             ui.lastLogged?.let { Text("✓ Kaydedildi: $it", color = MaterialTheme.colorScheme.primary) }
             ui.error?.let { Text("Hata: $it", color = MaterialTheme.colorScheme.error) }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Şablonlar / Favoriler", style = MaterialTheme.typography.titleMedium)
+                if (ui.templates.isEmpty()) {
+                    Text(
+                        "Henüz şablon yok. Sık tükettiğin bir kombinasyonu " +
+                            "(ör. \"Standart Sabah Kahvesi\") aşağıdan ekleyebilirsin.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    ui.templates.forEach { template ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = { viewModel.logTemplate(template) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(template.label + (template.amount?.let { " (${it.toInt()}${template.unit ?: ""})" } ?: ""))
+                            }
+                            TextButton(onClick = { viewModel.deleteTemplate(template.id) }) { Text("Sil") }
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { showTemplateDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("+ Şablon ekle") }
+            }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Su", style = MaterialTheme.typography.titleMedium)
@@ -214,6 +269,77 @@ fun LogScreen(onBack: () -> Unit, viewModel: LogViewModel = hiltViewModel()) {
             }
         )
     }
+
+    if (showTemplateDialog) {
+        AddTemplateDialog(
+            onDismiss = { showTemplateDialog = false },
+            onConfirm = { kind, label, amount, unit ->
+                viewModel.saveTemplate(kind, label, amount, unit)
+                showTemplateDialog = false
+            }
+        )
+    }
+}
+
+private fun IntakeKind.label() = when (this) {
+    IntakeKind.MEAL -> "Öğün"
+    IntakeKind.COFFEE -> "Kahve"
+    IntakeKind.WATER -> "Su"
+    IntakeKind.SUPPLEMENT -> "Takviye"
+}
+
+@Composable
+private fun AddTemplateDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (IntakeKind, String, Double?, String?) -> Unit
+) {
+    var kind by remember { mutableStateOf(IntakeKind.MEAL) }
+    var label by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Şablon ekle") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IntakeKind.entries.forEach { k ->
+                        if (k == kind) {
+                            Button(onClick = { kind = k }) { Text(k.label()) }
+                        } else {
+                            OutlinedButton(onClick = { kind = k }) { Text(k.label()) }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text("Ad (ör. Standart Sabah Kahvesi)") }
+                )
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Miktar (opsiyonel, ör. 500)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = unit,
+                    onValueChange = { unit = it },
+                    label = { Text("Birim (opsiyonel, ör. ml, g)") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(kind, label.trim(), amount.toDoubleOrNull(), unit.trim().ifBlank { null })
+                },
+                enabled = label.isNotBlank()
+            ) { Text("Kaydet") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }
+    )
 }
 
 @Composable

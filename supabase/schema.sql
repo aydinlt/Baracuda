@@ -214,3 +214,28 @@ create policy "body_metric_owner_all" on public.body_metric
 
 create index if not exists idx_body_metric_user_date
     on public.body_metric (user_id, date desc);
+
+-- ────────────────────────────────────────────────────────────
+-- 8) quick_template — Hızlı Şablonlar ve Favoriler (Hafta 41).
+--    Kullanıcının sık tükettiği kombinasyonları ("Standart Sabah Kahvesi"
+--    vb.) tek dokunuşla tekrar loglayabilmesi için kaydettiği kalıplar.
+--    Kendisi bir intake_entry değildir — LogScreen'de dokunulduğunda ayrı
+--    bir intake_entry satırı üretir.
+-- ────────────────────────────────────────────────────────────
+create table if not exists public.quick_template (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references auth.users(id) on delete cascade,
+    kind        text not null check (kind in ('MEAL','COFFEE','WATER','SUPPLEMENT')),
+    label       text not null,
+    amount      numeric,
+    unit        text,
+    created_at  timestamptz not null default now()
+);
+
+alter table public.quick_template enable row level security;
+
+create policy "quick_template_owner_all" on public.quick_template
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists idx_quick_template_user_created
+    on public.quick_template (user_id, created_at desc);
