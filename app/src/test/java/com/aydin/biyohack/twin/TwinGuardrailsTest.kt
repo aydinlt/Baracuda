@@ -194,6 +194,38 @@ class TwinGuardrailsTest {
     }
 
     @Test
+    fun `baska klinik terim gecmeyen kreatin karari da dusurulur`() {
+        // Önceki davranış: touchesClinical yalnızca "kreatinin" gibi CLINICAL_TERMS
+        // kelimelerinden biri geçince true oluyordu — burada action/why hiçbirinde
+        // öyle bir kelime yok, yalnızca "kreatin" + karar fiili var. Düzeltmeden önce
+        // bu action hiç filtrelenmeden geçerdi (system_twin.md Mutlak Kural 1 ihlali).
+        val action = TwinAction("09:00", "Kreatini bırakıyorum", "kas ağrısı hissediyorum", "supplement", "medium")
+        val result = TwinGuardrails.filter(listOf(action))
+        assertTrue(result.cleanedActions.isEmpty())
+        assertTrue(result.addedFlags.any { it.finding == action.action })
+    }
+
+    @Test
+    fun `hekim ibaresi zaten varsa kreatin karari dusurulmez`() {
+        val action = TwinAction(
+            "09:00", "Kreatini hekime danışarak bırakıyorum", "test öncesi", "supplement", "medium"
+        )
+        val result = TwinGuardrails.filter(listOf(action))
+        assertEquals(listOf(action), result.cleanedActions)
+        assertTrue(result.addedFlags.isEmpty())
+    }
+
+    @Test
+    fun `rutin gunluk kreatin hatirlatmasi etkilenmez`() {
+        // Karar fiili yok (yalnızca doz bilgisi) — her gün üretilen sıradan bir
+        // hatırlatma, "(hekime danışarak)" ekiyle kirletilmemeli.
+        val action = TwinAction("08:00", "Kreatin 5 g al", "günlük stack", "supplement", "high")
+        val result = TwinGuardrails.filter(listOf(action))
+        assertEquals(listOf(action), result.cleanedActions)
+        assertTrue(result.addedFlags.isEmpty())
+    }
+
+    @Test
     fun `kreatin arasi hekim ibaresi olmadan gelirse eklenir`() {
         val action = TwinAction(
             "09:00",
