@@ -143,6 +143,35 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate5To6_addsStepsTargetColumnWithDefaultWithoutTouchingExistingData() {
+        // v5 şemasıyla veritabanını oluştur ve profiles'a (stepsTarget kolonu OLMADAN) bir satır yaz.
+        helper.createDatabase(TEST_DB, 5).apply {
+            execSQL(
+                """
+                INSERT INTO profiles
+                    (userId, fullName, birthYear, sex, heightCm, timezone, waterTargetMl,
+                     proteinTargetMinG, proteinTargetMaxG, wakeTarget, bedEarliest, syncState)
+                VALUES ('test-user', 'Test', NULL, 'male', 180.0, 'Europe/Vilnius', 4000,
+                        140, 170, '07:00', '23:00', 'SYNCED')
+                """.trimIndent()
+            )
+            close()
+        }
+
+        // Migration'ı çalıştır: eski satır kaybolmaz ve yeni `stepsTarget` kolonu
+        // DEFAULT 10000 ile otomatik doldurulur (ALTER TABLE ... ADD COLUMN ... DEFAULT).
+        helper.runMigrationsAndValidate(TEST_DB, 6, true, MIGRATION_5_6).apply {
+            val cursor = query("SELECT userId, stepsTarget FROM profiles WHERE userId = 'test-user'")
+            cursor.use {
+                assert(it.moveToFirst()) { "v5'te yazılan profiles satırı migration sonrası kayboldu" }
+                val stepsTarget = it.getInt(it.getColumnIndexOrThrow("stepsTarget"))
+                assert(stepsTarget == 10000) { "stepsTarget varsayılanı 10000 değil: $stepsTarget" }
+            }
+            close()
+        }
+    }
+
     companion object {
         private const val TEST_DB = "migration-test"
     }

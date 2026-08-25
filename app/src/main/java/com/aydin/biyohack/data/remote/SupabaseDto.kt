@@ -143,21 +143,24 @@ data class ProfileRow(
     @SerialName("protein_target_min_g") val proteinTargetMinG: Int = 140,
     @SerialName("protein_target_max_g") val proteinTargetMaxG: Int = 170,
     @SerialName("wake_target") val wakeTarget: String = "07:00:00",
-    @SerialName("bed_earliest") val bedEarliest: String = "23:00:00"
+    @SerialName("bed_earliest") val bedEarliest: String = "23:00:00",
+    @SerialName("steps_target") val stepsTarget: Int = 10_000
 )
 
 fun Profile.toRow() = ProfileRow(
     id = userId, fullName = fullName, birthYear = birthYear, sex = sex,
     heightCm = heightCm, timezone = timezone, waterTargetMl = waterTargetMl,
     proteinTargetMinG = proteinTargetMinG, proteinTargetMaxG = proteinTargetMaxG,
-    wakeTarget = wakeTarget.toString(), bedEarliest = bedEarliest.toString()
+    wakeTarget = wakeTarget.toString(), bedEarliest = bedEarliest.toString(),
+    stepsTarget = stepsTarget
 )
 
 fun ProfileRow.toDomain() = Profile(
     userId = id, fullName = fullName, birthYear = birthYear, sex = sex,
     heightCm = heightCm, timezone = timezone, waterTargetMl = waterTargetMl,
     proteinTargetMinG = proteinTargetMinG, proteinTargetMaxG = proteinTargetMaxG,
-    wakeTarget = LocalTime.parse(wakeTarget), bedEarliest = LocalTime.parse(bedEarliest)
+    wakeTarget = LocalTime.parse(wakeTarget), bedEarliest = LocalTime.parse(bedEarliest),
+    stepsTarget = stepsTarget
 )
 
 @Serializable

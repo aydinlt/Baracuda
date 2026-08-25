@@ -20,5 +20,9 @@ data class Profile(
     val proteinTargetMinG: Int = 140,
     val proteinTargetMaxG: Int = 170,
     val wakeTarget: LocalTime = LocalTime.of(7, 0),
-    val bedEarliest: LocalTime = LocalTime.of(23, 0)
+    val bedEarliest: LocalTime = LocalTime.of(23, 0),
+    // Hafta 45: su/protein/kalkış hedefi gibi Ayarlar'dan düzenlenebilir —
+    // önceden DashboardUiState'te sabit 10_000 olarak kod içine gömülüydü
+    // (bkz. system_twin.md Bölüm A "10.000 adım hedefi").
+    val stepsTarget: Int = 10_000
 )

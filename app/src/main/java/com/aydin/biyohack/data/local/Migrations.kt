@@ -111,5 +111,17 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/**
+ * v5 → v6: `profiles` tablosuna `stepsTarget` kolonu eklendi (Hafta 45 —
+ * adım hedefi artık su/protein/kalkış gibi Ayarlar'dan düzenlenebilir).
+ * Varsayılan 10000, mevcut satırları bozmadan tüm var olan profillere
+ * uygulanır (bkz. DashboardScreen'deki eski sabit değer).
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `profiles` ADD COLUMN `stepsTarget` INTEGER NOT NULL DEFAULT 10000")
+    }
+}
+
 /** di/AppModule.kt'de `Room.databaseBuilder(...).addMigrations(*ALL_MIGRATIONS)` ile kullanılır. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

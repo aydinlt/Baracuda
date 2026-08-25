@@ -37,9 +37,21 @@ create table if not exists public.profiles (
     protein_target_max_g int not null default 170,
     wake_target         time not null default '07:00',
     bed_earliest        time not null default '23:00',
+    -- Hafta 45: su/protein/kalkış hedefi gibi Ayarlar'dan düzenlenebilir hale
+    -- getirildi — önceden yalnızca DashboardScreen'de sabit 10_000 olarak
+    -- kod içine gömülüydü, system_twin.md Bölüm A "10.000 adım hedefi"nden
+    -- söz etse de bu tek kullanıcı için bile değiştirilemiyordu.
+    steps_target        int not null default 10000,
     created_at          timestamptz not null default now(),
     updated_at          timestamptz not null default now()
 );
+
+-- `create table if not exists` yeni bir kuruluma yeter ama bu proje Hafta
+-- 1'den beri canlı — `profiles` tablosu zaten var, yukarıdaki tanım bu
+-- kurulumda no-op'tur. Kolonu zaten dağıtılmış veritabanına da eklemek için
+-- ayrı bir `alter table` gerekir (bu şemadaki ilk kolon-ekleme örneği; body_metric/
+-- quick_template/lab_result_template gibi öncekiler hep YENİ tablolardı).
+alter table public.profiles add column if not exists steps_target int not null default 10000;
 
 alter table public.profiles enable row level security;
 

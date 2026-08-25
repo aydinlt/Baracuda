@@ -129,7 +129,11 @@ class DashboardViewModel @Inject constructor(
                             it.copy(
                                 waterTargetMl = p.waterTargetMl,
                                 proteinTargetMinG = p.proteinTargetMinG,
-                                proteinTargetMaxG = p.proteinTargetMaxG
+                                proteinTargetMaxG = p.proteinTargetMaxG,
+                                // Önceden stepsTarget DashboardUiState'te sabit 10_000'di —
+                                // su/protein gibi Ayarlar'daki gerçek profil değerine bağlandı
+                                // (bkz. Hafta 45 commit notu).
+                                stepsTarget = p.stepsTarget
                             )
                         }
                     }
@@ -352,7 +356,9 @@ fun DashboardScreen(
                         } else {
                             Text("$steps / ${ui.stepsTarget}")
                             LinearProgressIndicator(
-                                progress = { (steps.toFloat() / ui.stepsTarget).coerceIn(0f, 1f) },
+                                // coerceAtLeast(1): stepsTarget artık Ayarlar'dan düzenlenebilir
+                                // (bkz. Hafta 45) — su/protein ilerleme çubuklarıyla aynı savunma.
+                                progress = { (steps.toFloat() / ui.stepsTarget.coerceAtLeast(1)).coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
