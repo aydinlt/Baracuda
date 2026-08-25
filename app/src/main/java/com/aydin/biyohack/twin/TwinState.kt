@@ -45,7 +45,24 @@ object TwinStateSerializer {
 
     private val zone: ZoneId = ZoneId.systemDefault()
 
-    fun toPromptBlock(s: TwinState, ruleFacts: List<String>): String = buildString {
+    /**
+     * [waterTargetMl]/[wakeTargetHour] — null bırakılırsa eski sabit
+     * varsayılanlar (4000 ml, 07:00) kullanılır (geriye dönük uyumlu).
+     *
+     * ÖNEMLİ: Bu iki değer TwinEngine.generate() içinde zaten TwinGuardrails.
+     * buildFacts()'a geçiriliyordu (bkz. Hafta 21 commit notu) ama BURAYA hiç
+     * ulaşmıyordu — "KURAL MOTORU" bölümü kullanıcının gerçek hedefine göre
+     * doğru "su geride/uygun" değerlendirmesi yaparken, hemen üstündeki
+     * "BUGÜNKÜ LOGLAR" bölümü sessizce sabit "4000 ml hedef" yazıyordu.
+     * Kullanıcı Ayarlar'dan hedefini değiştirdiğinde (ör. 5000 ml) İkiz aynı
+     * prompt içinde birbiriyle çelişen iki hedef görüyordu.
+     */
+    fun toPromptBlock(
+        s: TwinState,
+        ruleFacts: List<String>,
+        waterTargetMl: Int? = null,
+        wakeTargetHour: Int? = null
+    ): String = buildString {
         val today = s.now.atZone(zone)
         appendLine("═══ ANLIK DURUM ═══")
         appendLine("Şu an: ${today.toLocalDate()} ${today.toLocalTime().withNano(0)}")
@@ -74,7 +91,7 @@ object TwinStateSerializer {
             }
             n.wakeTime?.let {
                 appendLine("Kalkış: ${it.atZone(zone).toLocalTime().withNano(0)} " +
-                    "(hedef 07:00)")
+                    "(hedef %02d:00)".format(wakeTargetHour ?: 7))
             }
             n.spo2Avg?.let {
                 append("SpO2 ort %.1f%%".format(it))
@@ -118,7 +135,7 @@ object TwinStateSerializer {
         }
         val water = s.todayIntake.filter { it.type == IntakeType.WATER }
             .sumOf { it.amount ?: 0.0 }
-        appendLine("Su toplamı: ${water.toInt()} ml / 4000 ml hedef")
+        appendLine("Su toplamı: ${water.toInt()} ml / ${waterTargetMl ?: 4000} ml hedef")
         val lastMeal = s.todayIntake.filter { it.type == IntakeType.MEAL }.maxByOrNull { it.ts }
         if (lastMeal == null) appendLine("Bugün henüz öğün yok (OMAD penceresi açık)")
         else {
@@ -149,7 +166,11 @@ object TwinStateSerializer {
     }
 
     private fun triggerLabel(t: Trigger) = when (t) {
-        Trigger.MORNING_PROTOCOL -> "Sabah protokolü (07:30)"
+        // Sabit "(07:30)" kaldırıldı: gerçek çalışma saati profile.wakeTarget + 30dk'dır
+        // (bkz. TwinMorningWorker.scheduleNext) — kullanıcı kalkış hedefini değiştirdiğinde
+        // bu literal yanlış bilgi vermeye başlıyordu. Üstteki "Şu an: ..." satırı zaten
+        // gerçek saati taşıyor, ayrıca tahmini bir saat eklemeye gerek yok.
+        Trigger.MORNING_PROTOCOL -> "Sabah protokolü"
         Trigger.COFFEE_LOGGED -> "Kahve loglandı"
         Trigger.MEAL_LOGGED -> "Öğün loglandı"
         Trigger.WATER_LOGGED -> "Su güncellendi"

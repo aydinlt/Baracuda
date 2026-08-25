@@ -77,7 +77,9 @@ class TwinEngine(
     ): Result<TwinOutput> = withContext(Dispatchers.IO) {
         runCatching {
             val facts = TwinGuardrails.buildFacts(state, waterTargetMl, proteinMinG, proteinMaxG, wakeTargetHour)
-            val stateBlock = TwinStateSerializer.toPromptBlock(state, facts)
+            // waterTargetMl/wakeTargetHour buildFacts()'a zaten geçiriliyordu ama
+            // toPromptBlock()'a hiç ulaşmıyordu — bkz. TwinState.kt commit notu.
+            val stateBlock = TwinStateSerializer.toPromptBlock(state, facts, waterTargetMl, wakeTargetHour)
 
             val payload = JSONObject().apply {
                 put("trigger", state.trigger.name)
