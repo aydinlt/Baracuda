@@ -210,20 +210,34 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             val proteinMinValid = (proteinMin.toIntOrNull() ?: 0) > 0
             val proteinMaxValid = (proteinMax.toIntOrNull() ?: 0) > 0
             val stepsValid = (stepsTarget.toIntOrNull() ?: 0) > 0
+            // Önceden yalnızca "pozitif mi" kontrol ediliyordu (bkz. Hafta 33 commit
+            // notu) — alt hedefin üst hedeften büyük olması (ör. 170/140) engellenmiyordu.
+            // Bu, LogScreen/DashboardScreen'de "hedef 170–140 g" gibi anlamsız bir aralık
+            // metnine ve TwinGuardrails.buildFacts()'ın İkiz'e aynı anlamsız aralığı
+            // ("Protein hedefi 170–140 g") FACT olarak geçirmesine yol açardı.
+            val proteinRangeValid = proteinMinValid && proteinMaxValid &&
+                (proteinMin.toIntOrNull() ?: 0) <= (proteinMax.toIntOrNull() ?: 0)
             Button(
                 onClick = {
                     val w = waterTarget.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
                     val pMin = proteinMin.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
-                    val pMax = proteinMax.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
+                    val pMax = proteinMax.toIntOrNull()?.takeIf { it > 0 && it >= pMin } ?: return@Button
                     val wake = runCatching { LocalTime.parse(wakeTarget, timeFormatter) }.getOrNull() ?: return@Button
                     val steps = stepsTarget.toIntOrNull()?.takeIf { it > 0 } ?: return@Button
                     viewModel.save(w, pMin, pMax, wake, steps)
                 },
                 enabled = !ui.isSaving && ui.profile != null &&
-                    waterValid && proteinMinValid && proteinMaxValid && wakeValid && stepsValid,
+                    waterValid && proteinMinValid && proteinMaxValid && proteinRangeValid && wakeValid && stepsValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (ui.isSaving) "Kaydediliyor..." else "Kaydet")
+            }
+            if (proteinMinValid && proteinMaxValid && !proteinRangeValid) {
+                Text(
+                    "Protein alt hedef, üst hedeften büyük olamaz.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             if (ui.saved) Text("Kaydedildi.", color = MaterialTheme.colorScheme.primary)

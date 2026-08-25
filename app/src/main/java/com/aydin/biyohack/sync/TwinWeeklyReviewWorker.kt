@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.aydin.biyohack.data.repository.HealthSyncRepository
 import com.aydin.biyohack.data.repository.TwinRepository
 import com.aydin.biyohack.notifications.TwinNotifier
 import dagger.assisted.Assisted
@@ -38,11 +39,20 @@ import java.util.concurrent.TimeUnit
 class TwinWeeklyReviewWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
+    private val healthSyncRepository: HealthSyncRepository,
     private val twinRepository: TwinRepository,
     private val notifier: TwinNotifier
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        // TwinMorningWorker.doWork()'ün kendi "ÖNEMLİ" notunda açıkladığı aynı sorun
+        // burada da geçerliydi ama hiç ele alınmamıştı: HealthSyncWorker yalnızca 6
+        // saatte bir çalışıyor, bu worker ise haftanın sabit bir anında (Pazar 20:00)
+        // — herhangi bir "az önce senkronize edildi" olayına bağlı olmadan — tetikleniyor.
+        // syncAll() çağrılmadan runWeeklyReview() son 14 gecenin Room'daki en güncel
+        // halini değil, en son ne zaman HealthSyncWorker çalıştıysa o anki (saatler
+        // öncesine ait olabilecek) veriyi okuyordu.
+        healthSyncRepository.syncAll()
         val outcome = twinRepository.runWeeklyReview()
         outcome.getOrNull()?.let { notifier.notify(it) }
         scheduleNext(applicationContext)
