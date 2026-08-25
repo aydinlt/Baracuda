@@ -203,6 +203,12 @@ object TwinGuardrails {
             val text = "${a.action} ${a.why}".lowercase()
             val touchesClinical = CLINICAL_TERMS.any { text.contains(it) }
             val hasDecision = DECISION_VERBS.any { text.contains(it) }
+            // "kreatin" bilinçli olarak CLINICAL_TERMS'e eklenmedi — eklenirse
+            // GÜNLÜK rutin kreatin hatırlatmaları (bkz. system_twin.md Bölüm E)
+            // da touchesClinical=true olur ve alttaki yumuşak "(hekime danışarak)"
+            // ekleme dalı her gün tetiklenirdi. Bunun yerine yalnızca "kreatin" +
+            // karar fiili birlikte kontrol edilir.
+            val touchesCreatine = text.contains("kreatin")
 
             when {
                 a.domain.equals("clinical", true) -> {
@@ -213,7 +219,18 @@ object TwinGuardrails {
                     violations += "kırmızı bölgede karar cümlesi düşürüldü: ${a.action}"
                     flags += TwinFlag(a.action, "kendi başına aksiyon alınmaz", "none")
                 }
-                touchesClinical && text.contains("kreatin") && !text.contains("hekim") -> {
+                // Önceden bu dal yoktu: "Kreatini bırakıyorum" gibi bir karar cümlesi,
+                // action/why alanlarının hiçbirinde eGFR/kreatinin gibi başka bir
+                // CLINICAL_TERMS kelimesi geçmiyorsa touchesClinical hiç true olmuyordu
+                // (yalnızca "kreatinin" listedeydi, "kreatin" değil) — bu yüzden yukarıdaki
+                // dal atlanıp bu karar hiç filtrelenmeden bildirime düşüyordu. Bu, system_twin.md
+                // Bölüm D Mutlak Kural 1'i ("Kreatini test öncesi bırakma önerisi verirken HER
+                // ZAMAN 'hekime danışarak' ibaresi zorunlu") ihlal ediyordu.
+                touchesCreatine && hasDecision && !text.contains("hekim") -> {
+                    violations += "hekim ibaresi olmadan kreatin karar cümlesi düşürüldü: ${a.action}"
+                    flags += TwinFlag(a.action, "kendi başına aksiyon alınmaz", "none")
+                }
+                touchesClinical && touchesCreatine && !text.contains("hekim") -> {
                     violations += "kreatin ara önerisi 'hekime danışarak' ibaresi olmadan geldi"
                     clean += a.copy(action = a.action + " (hekime danışarak)")
                 }

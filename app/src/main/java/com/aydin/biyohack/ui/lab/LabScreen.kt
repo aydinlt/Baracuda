@@ -116,6 +116,20 @@ class LabViewModel @Inject constructor(
         }
     }
 
+    fun updateTemplate(
+        original: LabResultTemplate,
+        panel: String,
+        marker: String,
+        unit: String?,
+        refLow: Double?,
+        refHigh: Double?
+    ) {
+        viewModelScope.launch {
+            val result = repository.updateLabResultTemplate(original, panel, marker, unit, refLow, refHigh)
+            _ui.update { it.copy(error = result.exceptionOrNull()?.message) }
+        }
+    }
+
     fun deleteTemplate(id: String) {
         viewModelScope.launch {
             val result = repository.deleteLabResultTemplate(id)
@@ -142,6 +156,9 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
     // Bir "sık tekrarlanan panel" şablonuna dokunulduğunda AddResultDialog'u
     // bu değerlerle önceden doldurulmuş açmak için — null ise FAB'dan boş açılır.
     var resultPrefill by remember { mutableStateOf<LabResultTemplate?>(null) }
+    // "Düzenle" ile açıldığında AddLabTemplateDialog'u bu şablonla önceden
+    // doldurulmuş açmak için — null ise "+ Şablon" ile boş açılır.
+    var editingTemplate by remember { mutableStateOf<LabResultTemplate?>(null) }
 
     Scaffold(
         topBar = {
@@ -198,7 +215,10 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Şablonlar", style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = { showTemplateDialog = true }) { Text("+ Şablon") }
+                    TextButton(onClick = {
+                        editingTemplate = null
+                        showTemplateDialog = true
+                    }) { Text("+ Şablon") }
                 }
             }
             if (ui.templates.isEmpty()) {
@@ -223,6 +243,10 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
                         },
                         modifier = Modifier.weight(1f)
                     ) { Text("${template.panel} — ${template.marker}") }
+                    TextButton(onClick = {
+                        editingTemplate = template
+                        showTemplateDialog = true
+                    }) { Text("Düzenle") }
                     TextButton(onClick = { viewModel.deleteTemplate(template.id) }) { Text("Sil") }
                 }
             }
@@ -306,10 +330,20 @@ fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
 
     if (showTemplateDialog) {
         AddLabTemplateDialog(
-            onDismiss = { showTemplateDialog = false },
-            onConfirm = { panel, marker, unit, refLow, refHigh ->
-                viewModel.addTemplate(panel, marker, unit, refLow, refHigh)
+            initial = editingTemplate,
+            onDismiss = {
                 showTemplateDialog = false
+                editingTemplate = null
+            },
+            onConfirm = { panel, marker, unit, refLow, refHigh ->
+                val current = editingTemplate
+                if (current != null) {
+                    viewModel.updateTemplate(current, panel, marker, unit, refLow, refHigh)
+                } else {
+                    viewModel.addTemplate(panel, marker, unit, refLow, refHigh)
+                }
+                showTemplateDialog = false
+                editingTemplate = null
             }
         )
     }
@@ -402,18 +436,19 @@ private fun AddFlagDialog(onDismiss: () -> Unit, onConfirm: (finding: String, st
 
 @Composable
 private fun AddLabTemplateDialog(
+    initial: LabResultTemplate? = null,
     onDismiss: () -> Unit,
     onConfirm: (panel: String, marker: String, unit: String?, refLow: Double?, refHigh: Double?) -> Unit
 ) {
-    var panel by remember { mutableStateOf("") }
-    var marker by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("") }
-    var refLow by remember { mutableStateOf("") }
-    var refHigh by remember { mutableStateOf("") }
+    var panel by remember { mutableStateOf(initial?.panel ?: "") }
+    var marker by remember { mutableStateOf(initial?.marker ?: "") }
+    var unit by remember { mutableStateOf(initial?.unit ?: "") }
+    var refLow by remember { mutableStateOf(initial?.refLow?.toString() ?: "") }
+    var refHigh by remember { mutableStateOf(initial?.refHigh?.toString() ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Panel şablonu ekle") },
+        title = { Text(if (initial != null) "Panel şablonunu düzenle" else "Panel şablonu ekle") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = panel, onValueChange = { panel = it }, label = { Text("Panel (ör. BÖBREK)") })

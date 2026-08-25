@@ -316,6 +316,27 @@ class HealthSyncRepository(
         Unit
     }
 
+    /**
+     * Var olan bir lab şablonunu düzenler — id/createdAt korunur, geri kalan
+     * alanlar değişir. QuickTemplate'in updateQuickTemplate'iyle aynı desen
+     * (bkz. yukarısı): önceden LabResultTemplate yalnızca ekle/sil destekliyordu,
+     * yanlış/eksik girilen bir şablonu düzeltmenin tek yolu silip yeniden
+     * eklemekti (createdAt değişir, sıralaması değişir).
+     */
+    suspend fun updateLabResultTemplate(
+        original: LabResultTemplate,
+        panel: String,
+        marker: String,
+        unit: String?,
+        refLow: Double?,
+        refHigh: Double?
+    ): Result<Unit> = runCatching {
+        val updated = original.copy(panel = panel, marker = marker, unit = unit, refLow = refLow, refHigh = refHigh)
+        labResultTemplateDao.update(updated.toEntity(SyncState.PENDING))
+        pushPendingLabResultTemplates()
+        Unit
+    }
+
     suspend fun deleteLabResultTemplate(id: String): Result<Unit> = runCatching {
         postgrest.from("lab_result_template").delete { filter { eq("id", id) } }
         labResultTemplateDao.delete(id)

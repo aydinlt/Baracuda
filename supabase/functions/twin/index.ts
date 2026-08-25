@@ -71,9 +71,16 @@ serve(async (req) => {
       max_tokens: 1400,
       temperature: 0.3, // düşük: yaratıcılık değil tutarlılık istiyoruz
       system: SYSTEM_BLOCKS,
-      messages: [{ role: "user", content: userTurn }],
-      // Modelin JSON dışına çıkmasını engelleyen ucuz numara:
-      // yanıtı açık parantezle başlatmaya zorla
+      // Modelin JSON dışına çıkmasını engelleyen ucuz numara: yanıtı açık
+      // parantezle BAŞLATMAYA ZORLA. Yorumda bu teknik anlatılıyordu ama
+      // gerçekte uygulanmıyordu — yalnızca stop_sequences vardı, prefill
+      // (assistant mesajıyla "{" ile başlatma) hiç eklenmemişti. Anthropic
+      // API prefill'i yanıta EKLEMEZ, yalnızca ondan devam eder — bu yüzden
+      // aşağıda modelden dönen metnin başına "{" elle ekleniyor.
+      messages: [
+        { role: "user", content: userTurn },
+        { role: "assistant", content: "{" },
+      ],
       stop_sequences: ["\n\n\n"],
     }),
   });
@@ -93,7 +100,10 @@ serve(async (req) => {
   // cache_read_input_tokens yüksek olmalı
   console.log("usage", JSON.stringify(data.usage));
 
-  const text = (data.content ?? [])
+  // "{" prefill Anthropic'in yanıtına dahil değildir (yalnızca ondan devam
+  // eder) — TwinEngine.parse() geçerli JSON bekliyor, bu yüzden başa geri
+  // eklenmesi zorunlu; aksi halde her yanıt "{" olmadan başlayan, kırık JSON olur.
+  const text = "{" + (data.content ?? [])
     .filter((b: { type: string }) => b.type === "text")
     .map((b: { text: string }) => b.text)
     .join("");
