@@ -9,16 +9,31 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * v1 → v2 migration'ın veri kaybetmeden ve şema uyumsuzluğu olmadan
- * çalıştığını doğrular.
+ * v1 → v6 migration'ların veri kaybetmeden ve şema uyumsuzluğu olmadan
+ * çalıştığını doğrular (bkz. Migrations.kt).
  *
- * ÇALIŞTIRMADAN ÖNCE: bu testin derlenebilmesi/geçebilmesi için önce en az
- * bir kez `./gradlew assembleDebug` (ya da compileDebugKotlin) çalıştırıp
- * app/schemas/com.aydin.biyohack.data.local.AppDatabase/1.json ve 2.json
- * dosyalarının üretilmiş olması ve commitlenmiş olması gerekir — bunlar
- * build çıktısı değil, versiyon kontrollü referans şemalardır (bkz.
- * app/build.gradle.kts: `ksp { arg("room.schemaLocation", ...) }` ve
- * `sourceSets { androidTest.assets.srcDirs(...) }`).
+ * DURUM (bkz. Hafta 56 commit notu): Bu dosyadaki 6 test de ŞU AN
+ * ÇALIŞTIRILAMAZ — `app/schemas/` dizini bu repoda hiç var olmadı,
+ * yalnızca `.gitignore`'daki `!app/schemas/` istisnası ve bu yorumun
+ * kendisi onun commitlenmesi GEREKTİĞİNİ söylüyordu. `MigrationTestHelper.
+ * createDatabase(name, version)` her sürüm için `app/schemas/
+ * com.aydin.biyohack.data.local.AppDatabase/{version}.json` şema
+ * export'unu classpath/test-assets üzerinden okur; bu dosyalar yoksa
+ * testler derleme sırasında değil, ÇALIŞTIRMA anında "şema bulunamadı"
+ * hatasıyla başarısız olur (derleme başarılı görünür, testler kırmızı
+ * geçer). Bu ajan bu JSON'ları elle üretmeyi denemedi — Room'un
+ * identityHash'i ve alan/index metaverisi KSP'nin gerçek derleme çıktısı
+ * olmalı, elle yazılmış yanlış bir şema sessizce yanlış doğrulama yapabilir
+ * (belgelenmiş bir eksiklikten daha kötü).
+ *
+ * TEK SEFERLİK DÜZELTME (bir Android SDK'sı kurulu makinede):
+ *   ./gradlew assembleDebug
+ *   git add app/schemas && git commit -m "app/schemas: 1-6 sürüm export'ları"
+ * Bundan sonra bu 6 test normal şekilde çalışır (`./gradlew
+ * connectedAndroidTest` veya Android Studio'dan). Yeni bir migration
+ * eklenince (`MIGRATION_N_(N+1)`), `assembleDebug` otomatik olarak
+ * yalnızca YENİ sürümün JSON'ını üretir — var olanlar bozulmaz, bu yüzden
+ * bu adım her yeni migration'da tek seferlik tekrarlanır.
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {

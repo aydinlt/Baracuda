@@ -179,7 +179,15 @@ object TwinGuardrails {
     private val CLINICAL_TERMS = listOf(
         "egfr", "kreatinin", "hematokrit", "eritrositoz", "hemoglobin",
         "spo2", "oksijen satürasyon", "tirzepatid", "mounjaro", "prolaktin",
-        "testosteron", "kan bağışı", "epo", "cistatin", "sistatin", "libido"
+        "testosteron", "kan bağışı", "epo", "cistatin", "sistatin", "libido",
+        // "glp" — Hafta 49'daki kreatin boşluğuyla aynı sınıf: "tirzepatid"/
+        // "mounjaro" zaten listedeydi ama model ilacı ilaç sınıfı adıyla
+        // ("GLP-1") anarsa (ör. "GLP-1 dozunu azaltıyorum") touchesClinical hiç
+        // true olmuyordu — system_twin.md Bölüm D'nin kırmızı bölge listesindeki
+        // "tirzepatid dozu" tam olarak bu senaryoyu kapsıyor. Kısa/bare "glp"
+        // kasıtlı: "GLP-1", "GLP 1", "GLP1" gibi tire/boşluk varyasyonlarının
+        // hepsini substring olarak yakalar (bkz. "epo" ile aynı kısa-terim deseni).
+        "glp"
     )
 
     private val DECISION_VERBS = listOf(

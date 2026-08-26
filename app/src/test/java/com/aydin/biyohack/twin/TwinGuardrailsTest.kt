@@ -255,6 +255,18 @@ class TwinGuardrailsTest {
     }
 
     @Test
+    fun `ilaci GLP-1 sinif adiyla anan karar cumlesi de dusurulur`() {
+        // Hafta 49'daki kreatin boşluğuyla aynı sınıf: "tirzepatid"/"mounjaro"
+        // CLINICAL_TERMS'te vardı ama model ilacı yalnızca ilaç sınıfı adıyla
+        // ("GLP-1") anarsa, önceki listeyle touchesClinical hiç true olmuyordu —
+        // why alanında da başka bir klinik terim yok, yalnızca "glp" + karar fiili var.
+        val action = TwinAction("09:00", "GLP-1 dozunu azaltıyorum", "kilo kaybı hızlandı", "nutrition", "medium")
+        val result = TwinGuardrails.filter(listOf(action))
+        assertTrue(result.cleanedActions.isEmpty())
+        assertTrue(result.addedFlags.any { it.finding == action.action })
+    }
+
+    @Test
     fun `normal action degismeden gecer`() {
         val action = TwinAction("14:00", "Su iç", "hedefin gerisindesin", "hydration", "high")
         val result = TwinGuardrails.filter(listOf(action))
