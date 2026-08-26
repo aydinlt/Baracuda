@@ -89,9 +89,9 @@ class AuthViewModel @Inject constructor(
                     isLoading = false,
                     error = result.exceptionOrNull()?.message,
                     // Supabase projesinde e-posta onayı açıksa signUp başarılı döner ama
-                    // oturum hemen açılmaz (isSignedIn false kalır, MainActivity bu ekranı
-                    // kapatmaz) — önceden kullanıcı hiçbir açıklama olmadan boşlukta
-                    // kalıyordu, ne olduğunu anlamıyordu.
+                    // oturum hemen açılmaz (AuthState.SIGNED_OUT kalır, MainActivity bu
+                    // ekranı kapatmaz) — önceden kullanıcı hiçbir açıklama olmadan
+                    // boşlukta kalıyordu, ne olduğunu anlamıyordu.
                     signUpSucceeded = state.mode == AuthMode.SIGN_UP && result.isSuccess
                 )
             }
