@@ -103,9 +103,6 @@ interface LabResultDao {
     @Query("SELECT * FROM lab_result ORDER BY takenAtEpochDay DESC")
     fun observeAll(): Flow<List<LabResultEntity>>
 
-    @Query("SELECT * FROM lab_result WHERE marker = :marker ORDER BY takenAtEpochDay DESC LIMIT 1")
-    suspend fun latestByMarker(marker: String): LabResultEntity?
-
     @Query("SELECT * FROM lab_result WHERE syncState = 'PENDING'")
     suspend fun getPending(): List<LabResultEntity>
 

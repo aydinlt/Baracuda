@@ -66,9 +66,6 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE userId = :userId LIMIT 1")
     fun observe(userId: String): Flow<ProfileEntity?>
 
-    @Query("SELECT * FROM profiles WHERE userId = :userId LIMIT 1")
-    suspend fun get(userId: String): ProfileEntity?
-
     @Query("SELECT * FROM profiles WHERE syncState = 'PENDING'")
     suspend fun getPending(): List<ProfileEntity>
 
