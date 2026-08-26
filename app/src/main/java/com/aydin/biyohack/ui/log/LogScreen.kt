@@ -142,11 +142,20 @@ class LogViewModel @Inject constructor(
         }
     }
 
-    /** Yanlış dokunulmuş bir bugünkü logu siler — DashboardScreen'deki aynı işlevin LogScreen karşılığı. */
+    /**
+     * Yanlış dokunulmuş bir bugünkü logu siler — DashboardScreen'deki aynı işlevin LogScreen karşılığı.
+     *
+     * `log()` başarılı bir kayıttan sonra [refreshCreatineFreeDays]'i çağırıyordu ama burada hiç
+     * çağrılmıyordu — yanlışlıkla loglanan bir kreatin girdisi silindiğinde (ör. "Kreatin" butonuna
+     * iki kez basılması) sayaç, gerçek son kreatin logunu değil, silinen o yanlış girdiyi baz alan
+     * bayat değeri göstermeye devam ediyordu. (TwinGuardrails'e giden gerçek değer etkilenmiyordu —
+     * o her protokol çalışmasında repository'den taze okunuyor; bu yalnızca LogScreen'in görüntüsüydü.)
+     */
     fun deleteIntakeEntry(id: String) {
         viewModelScope.launch {
             val result = repository.deleteIntake(id)
             result.exceptionOrNull()?.let { e -> _ui.update { it.copy(error = e.message) } }
+            if (result.isSuccess) refreshCreatineFreeDays()
         }
     }
 }
