@@ -58,8 +58,23 @@ class TwinMorningWorker @AssistedInject constructor(
         healthSyncRepository.syncAll()
         val outcome = twinRepository.runProtocol(Trigger.MORNING_PROTOCOL)
         outcome.getOrNull()?.let { notifier.notify(it) }
-        scheduleNext(applicationContext, nextTargetTime())
-        return if (outcome.isSuccess) Result.success() else Result.retry()
+        // ÖNCEDEN scheduleNext() BAŞARI/BAŞARISIZLIK FARK ETMEKSİZİN, Result
+        // döndürülmeden hemen önce çağrılıyordu. scheduleNext() aynı WORK_NAME
+        // altında ExistingWorkPolicy.REPLACE ile enqueueUniqueWork çağırır — bu,
+        // şu anda çalışmakta olan bu worker'ın KENDİSİNİ (aynı unique-work adı
+        // altında) yarına planlanmış yeni bir istekle değiştirir/iptal eder.
+        // Sonuç: aşağıda Result.retry() döndürülse bile WorkManager'ın backoff'lu
+        // yeniden deneme mekanizması fiilen devre dışı kalıyordu — geçici bir
+        // hata (ör. ağ kesintisi) o gün hiç yeniden denenmeden doğrudan ertesi
+        // güne atlanıyordu. Artık yalnızca BAŞARILI çalışma sonunda yarına
+        // yeniden zamanlanıyor; başarısızlıkta WorkManager'ın kendi backoff'lu
+        // yeniden denemesi (Result.retry()) bugün içinde tekrar denesin diye
+        // schedule'a hiç dokunulmuyor.
+        if (outcome.isSuccess) {
+            scheduleNext(applicationContext, nextTargetTime())
+            return Result.success()
+        }
+        return Result.retry()
     }
 
     private suspend fun nextTargetTime(): LocalTime {

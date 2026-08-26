@@ -55,8 +55,19 @@ class TwinWeeklyReviewWorker @AssistedInject constructor(
         healthSyncRepository.syncAll()
         val outcome = twinRepository.runWeeklyReview()
         outcome.getOrNull()?.let { notifier.notify(it) }
-        scheduleNext(applicationContext)
-        return if (outcome.isSuccess) Result.success() else Result.retry()
+        // TwinMorningWorker.doWork()'ün Hafta 61 notunda açıklanan aynı sorun burada
+        // da vardı: scheduleNext() başarı/başarısızlık fark etmeksizin çağrılıyordu —
+        // bu, aynı WORK_NAME altında ExistingWorkPolicy.REPLACE ile şu anda çalışan bu
+        // worker'ın kendisini bir sonraki Pazar'a planlanmış yeni bir istekle
+        // değiştiriyor/iptal ediyordu, aşağıdaki Result.retry()'ı fiilen etkisiz
+        // kılıyordu. Artık yalnızca BAŞARILI çalışma sonunda yeniden zamanlanıyor;
+        // başarısızlıkta WorkManager'ın kendi backoff'lu yeniden denemesi işlesin
+        // diye schedule'a dokunulmuyor.
+        if (outcome.isSuccess) {
+            scheduleNext(applicationContext)
+            return Result.success()
+        }
+        return Result.retry()
     }
 
     companion object {
