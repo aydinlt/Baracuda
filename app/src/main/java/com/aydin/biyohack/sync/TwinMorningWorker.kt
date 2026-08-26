@@ -73,12 +73,40 @@ class TwinMorningWorker @AssistedInject constructor(
         private val DEFAULT_TARGET_TIME: LocalTime = LocalTime.of(7, 30)
 
         /**
-         * İlk kurulum (Application.onCreate — profil henüz Room'a çekilmemiş
-         * olabileceği için varsayılan saatle), her çalışmadan sonra (kendini
-         * profile göre yeniden zamanlama) ve kullanıcı kalkış hedefini
-         * Ayarlar'dan değiştirdiğinde çağrılır.
+         * Her çalışmadan sonra (kendini profile göre yeniden zamanlama) ve
+         * kullanıcı kalkış hedefini Ayarlar'dan değiştirdiğinde çağrılır —
+         * her ikisi de ELİNDE gerçek/güncel bir hedef olduğu için REPLACE
+         * kullanır (bkz. [ensureScheduled] için Application.onCreate() notu).
          */
         fun scheduleNext(context: Context, targetTime: LocalTime = DEFAULT_TARGET_TIME) {
+            enqueue(context, targetTime, ExistingWorkPolicy.REPLACE)
+        }
+
+        /**
+         * Application.onCreate()'in bootstrap çağrısı için — [scheduleNext]'in
+         * aksine ExistingWorkPolicy.KEEP kullanır.
+         *
+         * ÖNCEDEN Application.onCreate() doğrudan scheduleNext(context)'i (varsayılan
+         * DEFAULT_TARGET_TIME=07:30 ile) çağırıyordu. Application.onCreate() yalnızca
+         * ilk kurulumda değil, WorkManager'ın HERHANGİ bir worker'ı (bu ikisi dahil
+         * TwinWeeklyReviewWorker/MiddayReminderWorker/HealthSyncWorker) çalıştırmak
+         * için önce sürecin ayağa kalkması gerektiği HER seferinde de çalışır — yani
+         * uygulama arayüzü hiç açılmasa bile, bir arka plan işi süreci yeniden
+         * başlattığında da tetiklenir. REPLACE ile birleşince bu, kullanıcının
+         * Ayarlar'da seçtiği gerçek kalkış hedefine göre ÖNCEDEN DOĞRU zamanlanmış
+         * bir işi sessizce iptal edip sabit 07:30'a döndürüyordu — worker kendi
+         * çalışmasının sonunda gerçek profile göre tekrar doğru saate dönene kadar,
+         * kullanıcının o günkü sabah protokolü yanlış saatte tetiklenirdi.
+         *
+         * KEEP: iş zaten planlıysa (normal durum — worker kendi kendini zaten doğru
+         * zamanlıyor) DOKUNMAZ; yalnızca hiç plan yoksa (yalnızca gerçek ilk kurulum)
+         * varsayılan saatle kurar.
+         */
+        fun ensureScheduled(context: Context) {
+            enqueue(context, DEFAULT_TARGET_TIME, ExistingWorkPolicy.KEEP)
+        }
+
+        private fun enqueue(context: Context, targetTime: LocalTime, policy: ExistingWorkPolicy) {
             val zone = ZoneId.systemDefault()
             val now = ZonedDateTime.now(zone)
             var next = now.toLocalDate().atTime(targetTime).atZone(zone)
@@ -89,14 +117,7 @@ class TwinMorningWorker @AssistedInject constructor(
                 .setInitialDelay(delay.toMillis(), TimeUnit.MILLISECONDS)
                 .build()
 
-            // REPLACE: scheduleNext her çağrıldığında (worker'ın kendisi ya da Ayarlar'dan
-            // gelen bir profil güncellemesi) bekleyen eski zamanlamayı iptal edip yenisini
-            // kurar — çift tetikleme olmaz.
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
-                request
-            )
+            WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, request)
         }
     }
 }
