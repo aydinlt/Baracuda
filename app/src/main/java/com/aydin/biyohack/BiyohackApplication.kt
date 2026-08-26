@@ -23,7 +23,13 @@ class BiyohackApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         HealthSyncWorker.schedulePeriodic(this)
-        TwinMorningWorker.scheduleNext(this)
+        // TwinMorningWorker.ensureScheduled() (KEEP) kullanır, scheduleNext() (REPLACE)
+        // DEĞİL — bkz. TwinMorningWorker.ensureScheduled() KDoc'u (Hafta 61). onCreate()
+        // yalnızca ilk kurulumda değil, WorkManager herhangi bir worker'ı çalıştırmak
+        // için süreci her yeniden başlattığında da tetiklenir; REPLACE + varsayılan
+        // 07:30 kullanmak, kullanıcının Ayarlar'daki gerçek kalkış hedefine göre önceden
+        // doğru zamanlanmış bir işi sessizce iptal edip sabit 07:30'a döndürüyordu.
+        TwinMorningWorker.ensureScheduled(this)
         TwinWeeklyReviewWorker.scheduleNext(this)
         MiddayReminderWorker.scheduleNext(this)
     }
