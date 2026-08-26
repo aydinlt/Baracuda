@@ -37,10 +37,14 @@ data class TwinOutput(
 /**
  * API anahtarı burada YOK. Supabase Edge Function proxy'sine gider.
  * Anahtar APK'ya asla gömülmez.
+ *
+ * Hafta 60: constructor'dan `supabaseAnonKey` kaldırıldı — istek artık
+ * `generate()`'e geçirilen gerçek kullanıcı oturum jetonuyla (accessToken)
+ * imzalanıyor, anon key hiçbir yerde kimlik doğrulaması için kullanılmıyor
+ * (bkz. generate() KDoc'u).
  */
 class TwinEngine(
-    private val proxyUrl: String,          // https://<proj>.supabase.co/functions/v1/twin
-    private val supabaseAnonKey: String
+    private val proxyUrl: String            // https://<proj>.supabase.co/functions/v1/twin
 ) {
     /**
      * Uygulama boyunca tek bir istemci paylaşılır — bağlantı havuzlaması/keep-alive
@@ -66,6 +70,20 @@ class TwinEngine(
      * verilmezse TwinGuardrails kendi varsayılanlarını kullanır. Kullanıcının
      * Ayarlar'da belirlediği gerçek hedefleri kural motoruna taşımak için (bkz.
      * Hafta 21/52 commit notu) TwinRepository buradan geçirir.
+     * @param accessToken — GÜVENLİK (Hafta 60): önceden bu istek her zaman
+     * `supabaseAnonKey` ile imzalanıyordu. Anon key public/istemciye gömülü
+     * bir değerdir (RLS'in koruduğu Postgrest çağrıları için tasarlanmıştır)
+     * — ama Edge Function'ın platform seviyesindeki `verify_jwt` ayarı anon
+     * key'i de "geçerli bir JWT" sayar, index.ts'in kendisi çağıranın KİM
+     * olduğunu hiç doğrulamıyordu. Sonuç: anon key'i ele geçiren HERKES
+     * (decompile edilmiş APK'dan ya da bir ağ trafiği yakalamasından — anon
+     * key zaten böyle "sızabilecek" bir değerdir) bu fonksiyonu doğrudan
+     * çağırıp ANTHROPIC_API_KEY bütçesini (tier=weekly/Opus dahil, çağıran
+     * seçiyordu) sınırsızca tüketebilirdi. Artık gerçek kullanıcı oturum
+     * jetonu (bkz. TwinRepository/AppModule: `auth.currentAccessTokenOrNull()`)
+     * gönderiliyor; index.ts artık bunu doğruluyor (bkz. o dosyanın notu).
+     * accessToken null ise (oturum yok) istek GÖNDERİLMEZ — anon key'e sessizce
+     * geri dönmek tam olarak kapatılan açığı yeniden açardı.
      */
     suspend fun generate(
         state: TwinState,
@@ -74,9 +92,13 @@ class TwinEngine(
         proteinMinG: Int? = null,
         proteinMaxG: Int? = null,
         wakeTargetHour: Int? = null,
-        bedEarliestHour: Int? = null
+        bedEarliestHour: Int? = null,
+        accessToken: String? = null
     ): Result<TwinOutput> = withContext(Dispatchers.IO) {
         runCatching {
+            val token = accessToken
+                ?: error("Oturum jetonu yok — İkiz çağrısı için önce giriş yapılmış olmalı (bkz. Hafta 60 güvenlik notu)")
+
             val facts = TwinGuardrails.buildFacts(
                 state, waterTargetMl, proteinMinG, proteinMaxG, wakeTargetHour, bedEarliestHour
             )
@@ -92,7 +114,7 @@ class TwinEngine(
             }
 
             val response = httpClient.post(proxyUrl) {
-                header("Authorization", "Bearer $supabaseAnonKey")
+                header("Authorization", "Bearer $token")
                 contentType(ContentType.Application.Json)
                 setBody(payload.toString())
             }
