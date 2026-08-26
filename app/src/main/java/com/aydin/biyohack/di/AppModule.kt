@@ -107,8 +107,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideTwinEngine(): TwinEngine = TwinEngine(
-        proxyUrl = "${BuildConfig.SUPABASE_URL}/functions/v1/twin",
-        supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
+        proxyUrl = "${BuildConfig.SUPABASE_URL}/functions/v1/twin"
     )
 
     @Provides
@@ -131,6 +130,9 @@ object AppModule {
         postgrest = postgrest,
         healthSyncRepository = healthSyncRepository,
         profileRepository = profileRepository,
-        currentUserId = { auth.currentUserOrNull()?.id }
+        currentUserId = { auth.currentUserOrNull()?.id },
+        // Hafta 60 güvenlik notu: TwinEngine.generate() artık istekleri anon key
+        // yerine gerçek kullanıcı oturum jetonuyla imzalıyor (bkz. TwinEngine.kt).
+        currentAccessToken = { auth.currentAccessTokenOrNull() }
     )
 }

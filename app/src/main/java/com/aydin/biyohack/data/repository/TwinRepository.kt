@@ -27,7 +27,13 @@ class TwinRepository(
     private val postgrest: Postgrest,
     private val healthSyncRepository: HealthSyncRepository,
     private val profileRepository: ProfileRepository,
-    private val currentUserId: suspend () -> String?
+    private val currentUserId: suspend () -> String?,
+    // Hafta 60 güvenlik notu: TwinEngine.generate() artık anon key yerine
+    // gerçek kullanıcı oturum jetonuyla imzalanıyor (bkz. TwinEngine.kt ve
+    // supabase/functions/twin/index.ts) — anon key'i ele geçiren HERKESİN
+    // Edge Function'ı doğrudan çağırıp ANTHROPIC_API_KEY bütçesini
+    // tüketebilmesi mümkündü.
+    private val currentAccessToken: () -> String?
 ) {
     suspend fun runProtocol(
         trigger: Trigger,
@@ -44,7 +50,8 @@ class TwinRepository(
             proteinMinG = profile?.proteinTargetMinG,
             proteinMaxG = profile?.proteinTargetMaxG,
             wakeTargetHour = profile?.wakeTarget?.hour,
-            bedEarliestHour = profile?.bedEarliest?.hour
+            bedEarliestHour = profile?.bedEarliest?.hour,
+            accessToken = currentAccessToken()
         ).getOrThrow()
         logOutput(trigger, tier, output)
         persistClinicalFlags(output)
@@ -81,7 +88,8 @@ class TwinRepository(
             proteinMinG = profile?.proteinTargetMinG,
             proteinMaxG = profile?.proteinTargetMaxG,
             wakeTargetHour = profile?.wakeTarget?.hour,
-            bedEarliestHour = profile?.bedEarliest?.hour
+            bedEarliestHour = profile?.bedEarliest?.hour,
+            accessToken = currentAccessToken()
         ).getOrThrow()
         logOutput(Trigger.MANUAL, "weekly", output)
         persistClinicalFlags(output)
