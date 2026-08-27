@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hafta 64: ÖNCEDEN res/ altında hiçbir mipmap/drawable klasörü yoktu (yalnızca
+     values/strings.xml) — AndroidManifest.xml'deki android:icon="@mipmap/ic_launcher"
+     hiçbir zaman gerçek bir kaynağa karşılık gelmiyordu. Bu, uygulamanın tüm
+     Hafta 48-62 döngüsü boyunca hiç gerçek bir `./gradlew assembleDebug`/installDebug
+     ile derlenmediğini gösteriyor — kullanıcı ilk kez gerçek kuruluma geçtiğinde
+     AAPT "resource mipmap/ic_launcher not found" hatasıyla derleme çöktü.
+     minSdk 28 (>=26) olduğu için tek başına adaptive icon yeterli, eski yoğunluk
+     bazlı PNG mipmap-*dpi klasörlerine gerek yok. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
