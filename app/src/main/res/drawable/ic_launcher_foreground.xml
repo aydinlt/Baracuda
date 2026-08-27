@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hafta 64: basit bir EKG/nabız çizgisi — uyarlanabilir simgenin ön katmanı.
+     Adaptive icon maskesi kenarları kırptığı için içerik 108x108'lik viewport'un
+     güvenli iç bölgesinde (yaklaşık 24-84 aralığı) tutuldu. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M24,54 L40,54 L48,34 L60,74 L68,54 L84,54"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>
