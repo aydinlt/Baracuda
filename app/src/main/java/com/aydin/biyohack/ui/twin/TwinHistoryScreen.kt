@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -90,6 +91,7 @@ private fun triggerLabel(trigger: String) = when (trigger) {
     else -> trigger
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TwinHistoryScreen(onBack: () -> Unit, viewModel: TwinHistoryViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()

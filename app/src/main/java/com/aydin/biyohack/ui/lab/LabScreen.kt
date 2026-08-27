@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -145,6 +146,7 @@ private fun LabResult.isOutOfRange(): Boolean {
     return (low != null && value < low) || (high != null && value > high)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LabScreen(onBack: () -> Unit, viewModel: LabViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()

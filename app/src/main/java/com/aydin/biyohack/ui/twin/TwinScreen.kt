@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -82,6 +83,7 @@ class TwinViewModel @Inject constructor(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TwinScreen(onBack: () -> Unit, onOpenHistory: () -> Unit = {}, viewModel: TwinViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()

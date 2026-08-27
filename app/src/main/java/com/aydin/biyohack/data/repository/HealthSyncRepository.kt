@@ -293,7 +293,7 @@ class HealthSyncRepository(
     suspend fun pushPendingQuickTemplates() = runCatching {
         quickTemplateDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("quick_template").upsert(row, onConflict = "id")
+            postgrest.from("quick_template").upsert(row) { onConflict = "id" }
             quickTemplateDao.markSynced(entity.id)
         }
     }
@@ -346,7 +346,7 @@ class HealthSyncRepository(
     suspend fun pushPendingLabResultTemplates() = runCatching {
         labResultTemplateDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("lab_result_template").upsert(row, onConflict = "id")
+            postgrest.from("lab_result_template").upsert(row) { onConflict = "id" }
             labResultTemplateDao.markSynced(entity.id)
         }
     }
@@ -396,7 +396,7 @@ class HealthSyncRepository(
     suspend fun pushPendingBodyMetrics() = runCatching {
         bodyMetricDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("body_metric").upsert(row, onConflict = "user_id,date")
+            postgrest.from("body_metric").upsert(row) { onConflict = "user_id,date" }
             bodyMetricDao.markSynced(entity.epochDay)
         }
     }
@@ -429,7 +429,7 @@ class HealthSyncRepository(
         dailySnapshotDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
             postgrest.from("daily_snapshot")
-                .upsert(row, onConflict = "user_id,date")
+                .upsert(row) { onConflict = "user_id,date" }
             dailySnapshotDao.markSynced(entity.epochDay)
         }
     }
@@ -437,7 +437,7 @@ class HealthSyncRepository(
     suspend fun pushPendingIntake() = runCatching {
         intakeRecordDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("intake_entry").upsert(row, onConflict = "id")
+            postgrest.from("intake_entry").upsert(row) { onConflict = "id" }
             intakeRecordDao.markSynced(entity.id)
         }
     }
@@ -445,7 +445,7 @@ class HealthSyncRepository(
     suspend fun pushPendingLabResults() = runCatching {
         labResultDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("lab_result").upsert(row, onConflict = "id")
+            postgrest.from("lab_result").upsert(row) { onConflict = "id" }
             labResultDao.markSynced(entity.id)
         }
     }
@@ -453,7 +453,7 @@ class HealthSyncRepository(
     suspend fun pushPendingClinicalFlags() = runCatching {
         clinicalFlagDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("clinical_flag").upsert(row, onConflict = "id")
+            postgrest.from("clinical_flag").upsert(row) { onConflict = "id" }
             clinicalFlagDao.markSynced(entity.id)
         }
     }
