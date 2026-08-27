@@ -9,6 +9,7 @@
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SYSTEM_TWIN_MD } from "./system_twin.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 // SUPABASE_URL/SUPABASE_ANON_KEY her Edge Function'a Supabase tarafından
@@ -17,7 +18,21 @@ const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const ALLOWED_USER_ID = Deno.env.get("ALLOWED_USER_ID")!;
-const SYSTEM_PROMPT = await Deno.readTextFile("./system_twin.md");
+// Hafta 63: ÖNCEDEN burada `await Deno.readTextFile("./system_twin.md")`
+// vardı — bu bir ÇALIŞMA ZAMANI dosya okumasıydı, statik bir import DEĞİLDİ.
+// `supabase functions deploy` yükleme/paketleme adımı hangi dosyaların dahil
+// edileceğine yalnızca statik import grafiğine bakarak karar veriyor;
+// Deno.readTextFile'ın verdiği bir string yol bu grafikte görünmüyor. Sonuç:
+// index.ts yüklendi ama yanındaki system_twin.md hiç yüklenmedi — fonksiyon
+// her istekte modül yüklenirken (üstteki satırda, ilk istekten önce) şu
+// hatayla çöküyordu: "NotFound: path not found: .../twin/system_twin.md".
+// Fix: içerik system_twin.ts içine bir string sabiti olarak taşındı (bkz. o
+// dosya — system_twin.md'den JSON.stringify ile üretildi, karakter karakter
+// aynı) ve burada STATİK import ile alınıyor — bu paketleyicinin görebildiği
+// bir bağımlılık, deploy'a dahil edilmesi garanti. system_twin.md insan
+// tarafından okunabilir kaynak olarak repoda kalıyor; içerik değiştiğinde
+// system_twin.ts yeniden üretilmeli (bkz. system_twin.ts başındaki not).
+const SYSTEM_PROMPT = SYSTEM_TWIN_MD;
 
 // Statik blok ~2.500 token ve hiç değişmiyor → cache'lenmesi zorunlu.
 // Cache TTL 5 dk; sabah protokolü + gün içi override'lar aynı cache'i kullanır.
