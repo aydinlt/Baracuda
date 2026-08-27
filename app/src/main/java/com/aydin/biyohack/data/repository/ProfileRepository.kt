@@ -47,7 +47,7 @@ class ProfileRepository(
     suspend fun pushPending(): Result<Unit> = runCatching {
         profileDao.getPending().forEach { entity ->
             val row = entity.toDomain().toRow()
-            postgrest.from("profiles").upsert(row, onConflict = "id")
+            postgrest.from("profiles").upsert(row) { onConflict = "id" }
             profileDao.markSynced(entity.userId)
         }
     }
